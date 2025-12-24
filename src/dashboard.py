@@ -30,7 +30,7 @@ DASHBOARD_HTML = '''
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Folder Dashboard</title>
+    <title>Sift</title>
     <style>
         * {
             margin: 0;
@@ -839,8 +839,8 @@ DASHBOARD_HTML = '''
     <div class="container">
         <header class="header">
             <h1>
-                <span class="icon">📁</span>
-                Smart Folder Dashboard
+                <span class="icon">🗂️</span>
+                Sift
             </h1>
             
             <!-- Model Profile Selector -->
