@@ -77,13 +77,58 @@ run.bat
 git clone https://github.com/ripleyhhunter/Sift.git
 cd Sift
 
-# Run the setup script (installs all dependencies)
+# Run the setup script (installs Homebrew dependencies + Python venv)
 chmod +x setup_macos.sh
 ./setup_macos.sh
+
+# Copy the macOS config template
+cp config/settings.macos.yaml config/settings.yaml
+
+# Edit config to set your username (replace {username} with your macOS username)
+nano config/settings.yaml
 
 # Start the application
 ./run_sift.sh
 ```
+
+> **Note:** The setup script will install `poppler` and `libmagic` via Homebrew (required for PDF processing and file type detection).
+
+---
+
+## Updating Sift
+
+### If You Cloned with Git (Recommended)
+
+Updates are simple—just pull the latest changes:
+
+```bash
+cd ~/path/to/Sift
+
+# Pull latest updates
+git pull origin master
+
+# If dependencies changed, update them:
+# Windows:
+venv\Scripts\pip install -r requirements.txt
+
+# macOS:
+source venv/bin/activate
+pip install -r requirements-macos.txt
+```
+
+### If You Downloaded a Release ZIP
+
+1. Go to [Releases](https://github.com/ripleyhhunter/Sift/releases)
+2. Download the latest version for your platform
+3. Extract to a new folder
+4. Copy your `config/settings.yaml` from the old installation to preserve your settings
+5. Delete the old installation
+
+### Preserving Your Settings
+
+When updating, your `config/settings.yaml` file contains your customizations. This file is **not overwritten** by `git pull`, so your settings are safe.
+
+If a new version adds new configuration options, check `config/settings.default.yaml` to see what's new and add any options you want to your `settings.yaml`.
 
 ---
 
