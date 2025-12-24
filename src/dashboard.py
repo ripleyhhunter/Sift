@@ -1503,14 +1503,18 @@ DASHBOARD_HTML = '''
                         const total = data.batch.total_queued;
                         const pending = data.batch.pending + data.batch.retry_pending;
                         
-                        if (total > 0) {
+                        if (data.batch.current_file) {
+                            // Currently processing a specific file
+                            const filename = data.batch.current_file.length > 25 ? 
+                                data.batch.current_file.substring(0, 22) + '...' : data.batch.current_file;
+                            text.innerHTML = `Processing: <strong>${filename}</strong>`;
+                        } else if (total > 0 && pending > 0) {
                             const pct = Math.round((done / total) * 100);
                             text.innerHTML = `Processing: <strong>${done}/${total}</strong> (${pct}%)`;
                         } else if (pending > 0) {
-                            text.innerHTML = `Processing: <strong>${pending}</strong> pending`;
+                            text.innerHTML = `Queue: <strong>${pending}</strong> pending`;
                         } else {
-                            text.textContent = data.batch.current_file ? 
-                                `Processing: ${data.batch.current_file.substring(0, 20)}...` : 'Running';
+                            text.textContent = 'Processing...';
                         }
                     } else if (data.batch && data.batch.pending > 0) {
                         text.innerHTML = `Queue: <strong>${data.batch.pending}</strong> files`;

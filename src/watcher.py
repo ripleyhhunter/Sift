@@ -728,14 +728,26 @@ class DocumentWatcher:
             Dict with processing statistics
         """
         with self._stats_lock:
+            pending = self.file_queue.qsize()
+            retry_pending = self.retry_queue.qsize()
+            
+            # Determine if we're actually processing
+            # is_processing is true if we have a current file OR there are pending items
+            is_processing = (self._current_file is not None) or (pending > 0) or (retry_pending > 0)
+            
+            # Auto-reset batch stats if batch is complete (nothing pending, nothing processing)
+            if not is_processing and self._total_queued > 0:
+                # Batch complete - keep stats for display but mark as done
+                pass
+            
             return {
                 'total_queued': self._total_queued,
                 'processed': self._processed_count,
                 'failed': self._failed_count,
-                'pending': self.file_queue.qsize(),
-                'retry_pending': self.retry_queue.qsize(),
+                'pending': pending,
+                'retry_pending': retry_pending,
                 'current_file': self._current_file,
-                'is_processing': self._current_file is not None
+                'is_processing': is_processing
             }
     
     def reset_batch_stats(self) -> None:
