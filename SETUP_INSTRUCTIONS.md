@@ -28,7 +28,7 @@ An AI-powered document organizer that automatically sorts your files into catego
 2. Select the **qwen/qwen3-4b** model from the dropdown
 3. Click **Start Server**
 4. You should see "Server started on port 1234"
-5. **Keep LMStudio running** while using Smart Folder
+5. **Keep LMStudio running** while using Sift
 
 ## Step 4: Run the Setup Script
 
@@ -38,10 +38,10 @@ An AI-powered document organizer that automatically sorts your files into catego
 
 This will:
 - Install Poppler (for PDF processing)
-- Create your SmartFolder directory structure
+- Create your Sift directory structure
 - Set up the configuration
 
-## Step 5: Start Using Smart Folder
+## Step 5: Start Using Sift
 
 1. Make sure LMStudio is running with the server started
 2. **Double-click `run_smartfolder.bat`**
@@ -49,7 +49,7 @@ This will:
 
 ## How to Use
 
-1. Drop any document into: `Documents\SmartFolder\Inbox`
+1. Drop any document into: `Documents\Sift\Inbox`
 2. Wait a few seconds (the AI analyzes the document)
 3. The document will be automatically moved to the appropriate folder!
 
@@ -71,7 +71,7 @@ This will:
 
 ## Customization
 
-Edit `SmartFolder\config\settings.yaml` to:
+Edit `Sift\config\settings.yaml` to:
 - Change folder locations
 - Add/modify categories and subcategories
 - Adjust AI settings
@@ -84,7 +84,7 @@ Edit `SmartFolder\config\settings.yaml` to:
 - Check that port 1234 is not blocked
 
 ### Documents not being processed
-- Check the `logs\smart_folder.log` file for errors
+- Check the `logs\sift.log` file for errors
 - Make sure the file type is supported
 - Try restarting the application
 
@@ -94,7 +94,7 @@ Edit `SmartFolder\config\settings.yaml` to:
 
 ## Need Help?
 
-Check the log file at `SmartFolder\logs\smart_folder.log` for detailed information about what's happening.
+Check the log file at `Sift\logs\sift.log` for detailed information about what's happening.
 
 ---
 

@@ -1,4 +1,4 @@
-# Smart Document Folder System - Dependencies
+# Sift - Dependencies
 # Python 3.10+ required
 
 # File system monitoring

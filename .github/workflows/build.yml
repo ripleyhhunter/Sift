@@ -1,4 +1,4 @@
-name: Build SmartFolder
+name: Build Sift
 
 on:
   push:
@@ -31,33 +31,33 @@ jobs:
     - name: Build executable
       shell: pwsh
       run: |
-        pyinstaller --name SmartFolder --onedir --console --hidden-import watchdog.observers --hidden-import watchdog.events --hidden-import rapidfuzz --hidden-import yaml --hidden-import pypdf --hidden-import openpyxl --hidden-import pystray src/main.py
+        pyinstaller --name Sift --onedir --console --hidden-import watchdog.observers --hidden-import watchdog.events --hidden-import rapidfuzz --hidden-import yaml --hidden-import pypdf --hidden-import openpyxl --hidden-import pystray src/main.py
     
     - name: Package distribution
       shell: pwsh
       run: |
-        New-Item -ItemType Directory -Force -Path dist\SmartFolder_Package\SmartFolder
-        Copy-Item -Recurse dist\SmartFolder\* dist\SmartFolder_Package\SmartFolder\
-        New-Item -ItemType Directory -Force -Path dist\SmartFolder_Package\SmartFolder\config
-        Copy-Item config\settings.default.yaml dist\SmartFolder_Package\SmartFolder\config\
-        Copy-Item config\settings.default.yaml dist\SmartFolder_Package\SmartFolder\config\settings.yaml
-        New-Item -ItemType Directory -Force -Path dist\SmartFolder_Package\SmartFolder\logs
-        New-Item -ItemType Directory -Force -Path dist\SmartFolder_Package\SmartFolder\temp
-        New-Item -ItemType Directory -Force -Path dist\SmartFolder_Package\SmartFolder\data
-        Copy-Item README.md dist\SmartFolder_Package\
-        if (Test-Path SETUP_INSTRUCTIONS.md) { Copy-Item SETUP_INSTRUCTIONS.md dist\SmartFolder_Package\ }
-        '@echo off`r`ncd /d "%~dp0SmartFolder"`r`nSmartFolder.exe %*`r`npause' | Out-File -FilePath dist\SmartFolder_Package\run_smartfolder.bat -Encoding ascii
+        New-Item -ItemType Directory -Force -Path dist\Sift_Package\Sift
+        Copy-Item -Recurse dist\Sift\* dist\Sift_Package\Sift\
+        New-Item -ItemType Directory -Force -Path dist\Sift_Package\Sift\config
+        Copy-Item config\settings.default.yaml dist\Sift_Package\Sift\config\
+        Copy-Item config\settings.default.yaml dist\Sift_Package\Sift\config\settings.yaml
+        New-Item -ItemType Directory -Force -Path dist\Sift_Package\Sift\logs
+        New-Item -ItemType Directory -Force -Path dist\Sift_Package\Sift\temp
+        New-Item -ItemType Directory -Force -Path dist\Sift_Package\Sift\data
+        Copy-Item README.md dist\Sift_Package\
+        if (Test-Path SETUP_INSTRUCTIONS.md) { Copy-Item SETUP_INSTRUCTIONS.md dist\Sift_Package\ }
+        '@echo off`r`ncd /d "%~dp0Sift"`r`nSift.exe %*`r`npause' | Out-File -FilePath dist\Sift_Package\run_sift.bat -Encoding ascii
     
     - name: Create ZIP archive
       shell: pwsh
       run: |
-        Compress-Archive -Path dist\SmartFolder_Package\* -DestinationPath dist\SmartFolder_Windows.zip
+        Compress-Archive -Path dist\Sift_Package\* -DestinationPath dist\Sift_Windows.zip
     
     - name: Upload Windows artifact
       uses: actions/upload-artifact@v4
       with:
-        name: SmartFolder-Windows
-        path: dist/SmartFolder_Windows.zip
+        name: Sift-Windows
+        path: dist/Sift_Windows.zip
 
   build-macos:
     runs-on: macos-latest
@@ -83,45 +83,45 @@ jobs:
     
     - name: Build executable
       run: |
-        pyinstaller --name SmartFolder --onedir --console --hidden-import watchdog.observers --hidden-import watchdog.events --hidden-import rapidfuzz --hidden-import yaml --hidden-import pypdf --hidden-import openpyxl --hidden-import pystray --hidden-import pync src/main.py
+        pyinstaller --name Sift --onedir --console --hidden-import watchdog.observers --hidden-import watchdog.events --hidden-import rapidfuzz --hidden-import yaml --hidden-import pypdf --hidden-import openpyxl --hidden-import pystray --hidden-import pync src/main.py
     
     - name: Package distribution
       run: |
-        mkdir -p dist/SmartFolder_Package/SmartFolder
-        cp -R dist/SmartFolder/* dist/SmartFolder_Package/SmartFolder/
-        mkdir -p dist/SmartFolder_Package/SmartFolder/config
-        cp config/settings.default.yaml dist/SmartFolder_Package/SmartFolder/config/
-        cp config/settings.macos.yaml dist/SmartFolder_Package/SmartFolder/config/
-        sed "s/{username}/\$USER/g" config/settings.macos.yaml > dist/SmartFolder_Package/SmartFolder/config/settings.yaml
-        mkdir -p dist/SmartFolder_Package/SmartFolder/logs
-        mkdir -p dist/SmartFolder_Package/SmartFolder/temp
-        mkdir -p dist/SmartFolder_Package/SmartFolder/data
-        cp README.md dist/SmartFolder_Package/
-        cp SETUP_INSTRUCTIONS_MACOS.md dist/SmartFolder_Package/ || true
-        echo '#!/bin/bash' > dist/SmartFolder_Package/run_smartfolder.sh
-        echo 'SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"' >> dist/SmartFolder_Package/run_smartfolder.sh
-        echo 'cd "$SCRIPT_DIR/SmartFolder"' >> dist/SmartFolder_Package/run_smartfolder.sh
-        echo './SmartFolder "$@"' >> dist/SmartFolder_Package/run_smartfolder.sh
-        chmod +x dist/SmartFolder_Package/run_smartfolder.sh
-        echo '#!/bin/bash' > dist/SmartFolder_Package/install_dependencies.sh
-        echo 'echo "Installing dependencies for SmartFolder..."' >> dist/SmartFolder_Package/install_dependencies.sh
-        echo 'if ! command -v brew &> /dev/null; then' >> dist/SmartFolder_Package/install_dependencies.sh
-        echo '    echo "Please install Homebrew first: https://brew.sh"' >> dist/SmartFolder_Package/install_dependencies.sh
-        echo '    exit 1' >> dist/SmartFolder_Package/install_dependencies.sh
-        echo 'fi' >> dist/SmartFolder_Package/install_dependencies.sh
-        echo 'brew install poppler' >> dist/SmartFolder_Package/install_dependencies.sh
-        echo 'echo "Done! You can now run ./run_smartfolder.sh"' >> dist/SmartFolder_Package/install_dependencies.sh
-        chmod +x dist/SmartFolder_Package/install_dependencies.sh
+        mkdir -p dist/Sift_Package/Sift
+        cp -R dist/Sift/* dist/Sift_Package/Sift/
+        mkdir -p dist/Sift_Package/Sift/config
+        cp config/settings.default.yaml dist/Sift_Package/Sift/config/
+        cp config/settings.macos.yaml dist/Sift_Package/Sift/config/
+        sed "s/{username}/\$USER/g" config/settings.macos.yaml > dist/Sift_Package/Sift/config/settings.yaml
+        mkdir -p dist/Sift_Package/Sift/logs
+        mkdir -p dist/Sift_Package/Sift/temp
+        mkdir -p dist/Sift_Package/Sift/data
+        cp README.md dist/Sift_Package/
+        cp SETUP_INSTRUCTIONS_MACOS.md dist/Sift_Package/ || true
+        echo '#!/bin/bash' > dist/Sift_Package/run_sift.sh
+        echo 'SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"' >> dist/Sift_Package/run_sift.sh
+        echo 'cd "$SCRIPT_DIR/Sift"' >> dist/Sift_Package/run_sift.sh
+        echo './Sift "$@"' >> dist/Sift_Package/run_sift.sh
+        chmod +x dist/Sift_Package/run_sift.sh
+        echo '#!/bin/bash' > dist/Sift_Package/install_dependencies.sh
+        echo 'echo "Installing dependencies for Sift..."' >> dist/Sift_Package/install_dependencies.sh
+        echo 'if ! command -v brew &> /dev/null; then' >> dist/Sift_Package/install_dependencies.sh
+        echo '    echo "Please install Homebrew first: https://brew.sh"' >> dist/Sift_Package/install_dependencies.sh
+        echo '    exit 1' >> dist/Sift_Package/install_dependencies.sh
+        echo 'fi' >> dist/Sift_Package/install_dependencies.sh
+        echo 'brew install poppler' >> dist/Sift_Package/install_dependencies.sh
+        echo 'echo "Done! You can now run ./run_sift.sh"' >> dist/Sift_Package/install_dependencies.sh
+        chmod +x dist/Sift_Package/install_dependencies.sh
     
     - name: Create ZIP archive
       run: |
-        cd dist && zip -r SmartFolder_macOS.zip SmartFolder_Package
+        cd dist && zip -r Sift_macOS.zip Sift_Package
     
     - name: Upload macOS artifact
       uses: actions/upload-artifact@v4
       with:
-        name: SmartFolder-macOS
-        path: dist/SmartFolder_macOS.zip
+        name: Sift-macOS
+        path: dist/Sift_macOS.zip
 
   build-source:
     runs-on: ubuntu-latest
@@ -132,24 +132,24 @@ jobs:
     
     - name: Create source distribution
       run: |
-        mkdir -p dist/SmartFolder_Source
-        cp -r src dist/SmartFolder_Source/
-        cp -r config dist/SmartFolder_Source/
-        cp requirements.txt dist/SmartFolder_Source/
-        cp requirements-macos.txt dist/SmartFolder_Source/ || true
-        cp setup_macos.sh dist/SmartFolder_Source/ || true
-        cp README.md dist/SmartFolder_Source/
-        cp SETUP_INSTRUCTIONS_MACOS.md dist/SmartFolder_Source/ || true
-        mkdir -p dist/SmartFolder_Source/logs
-        mkdir -p dist/SmartFolder_Source/temp
-        mkdir -p dist/SmartFolder_Source/data
-        cd dist && zip -r SmartFolder_Source.zip SmartFolder_Source
+        mkdir -p dist/Sift_Source
+        cp -r src dist/Sift_Source/
+        cp -r config dist/Sift_Source/
+        cp requirements.txt dist/Sift_Source/
+        cp requirements-macos.txt dist/Sift_Source/ || true
+        cp setup_macos.sh dist/Sift_Source/ || true
+        cp README.md dist/Sift_Source/
+        cp SETUP_INSTRUCTIONS_MACOS.md dist/Sift_Source/ || true
+        mkdir -p dist/Sift_Source/logs
+        mkdir -p dist/Sift_Source/temp
+        mkdir -p dist/Sift_Source/data
+        cd dist && zip -r Sift_Source.zip Sift_Source
     
     - name: Upload source artifact
       uses: actions/upload-artifact@v4
       with:
-        name: SmartFolder-Source
-        path: dist/SmartFolder_Source.zip
+        name: Sift-Source
+        path: dist/Sift_Source.zip
 
   release:
     needs: [build-windows, build-macos, build-source]
@@ -169,9 +169,9 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          artifacts/SmartFolder-Windows/SmartFolder_Windows.zip
-          artifacts/SmartFolder-macOS/SmartFolder_macOS.zip
-          artifacts/SmartFolder-Source/SmartFolder_Source.zip
+          artifacts/Sift-Windows/Sift_Windows.zip
+          artifacts/Sift-macOS/Sift_macOS.zip
+          artifacts/Sift-Source/Sift_Source.zip
         generate_release_notes: true
         draft: false
         prerelease: false

@@ -2,7 +2,7 @@
 Build script to create a source distribution package for macOS.
 
 This script creates a ZIP file containing everything needed to run
-Smart Document Folder System on macOS.
+Sift on macOS.
 
 Usage:
     python build_macos_package.py
@@ -18,7 +18,7 @@ from datetime import datetime
 def create_macos_package():
     """Create a source distribution package for macOS."""
     print("=" * 60)
-    print("Smart Document Folder System - macOS Package Builder")
+    print("Sift - macOS Package Builder")
     print("=" * 60)
     print()
 
@@ -61,7 +61,7 @@ def create_macos_package():
     ]
     
     # Create package directory
-    package_name = "SmartFolder_macOS"
+    package_name = "Sift_macOS"
     package_dir = Path("dist") / package_name
     
     print(f"[*] Creating package: {package_dir}")

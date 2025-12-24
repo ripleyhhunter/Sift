@@ -1,5 +1,5 @@
 """
-Document processing module for Smart Document Folder System.
+Document processing module for Sift.
 
 Handles text extraction from documents (PDF, Office, CSV) for fast text-based classification,
 with fallback to image conversion for vision model analysis of image files.

@@ -1,5 +1,5 @@
-' SmartFolder Background Launcher
-' Runs the Smart Document Folder System silently in the background
+' Sift Background Launcher
+' Runs Sift silently in the background
 
 Option Explicit
 
@@ -12,7 +12,7 @@ Set objFSO = CreateObject("Scripting.FileSystemObject")
 Set objWMI = GetObject("winmgmts://./root/cimv2")
 
 ' Project paths
-strProjectRoot = "C:\\Users\\Ripley\\OneDrive\\Documents\\Cursor Projects\\SmartFolder"
+strProjectRoot = objFSO.GetParentFolderName(WScript.ScriptFullName)
 strPython = strProjectRoot & "\venv\Scripts\python.exe"
 strScript = strProjectRoot & "\src\main.py"
 
@@ -21,7 +21,7 @@ intRunning = 0
 Set colProcesses = objWMI.ExecQuery("SELECT * FROM Win32_Process WHERE Name = 'python.exe'")
 For Each objProcess In colProcesses
     If InStr(objProcess.CommandLine, "main.py") > 0 Then
-        If InStr(objProcess.CommandLine, "SmartFolder") > 0 Then
+        If InStr(objProcess.CommandLine, "Sift") > 0 Or InStr(objProcess.CommandLine, strProjectRoot) > 0 Then
             intRunning = 1
             Exit For
         End If
@@ -35,8 +35,8 @@ End If
 
 ' Check if Python exists
 If Not objFSO.FileExists(strPython) Then
-    MsgBox "SmartFolder Error: Python virtual environment not found." & vbCrLf & _
-           "Please run install.bat first.", vbCritical, "SmartFolder"
+    MsgBox "Sift Error: Python virtual environment not found." & vbCrLf & _
+           "Please run install.bat first.", vbCritical, "Sift"
     WScript.Quit
 End If
 
@@ -48,3 +48,4 @@ strCommand = """" & strPython & """ """ & strScript & """ --background"
 
 ' Run hidden (0 = hidden, False = don't wait)
 objShell.Run strCommand, 0, False
+

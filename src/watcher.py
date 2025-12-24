@@ -1,5 +1,5 @@
 """
-Folder monitoring module for Smart Document Folder System.
+Folder monitoring module for Sift.
 
 Uses watchdog library to monitor the inbox folder for new files
 and trigger the document processing pipeline.

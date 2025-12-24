@@ -1,6 +1,6 @@
 @echo off
 echo ========================================
-echo Smart Folder - Disable Auto-Start
+echo Sift - Disable Auto-Start
 echo ========================================
 echo.
 
@@ -17,7 +17,7 @@ venv\Scripts\python.exe src\main.py --disable-startup
 
 echo.
 echo ========================================
-echo Smart Folder will no longer start automatically.
+echo Sift will no longer start automatically.
 echo.
 echo To re-enable, run: enable_auto_start.bat
 echo ========================================

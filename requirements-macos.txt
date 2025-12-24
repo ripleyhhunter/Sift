@@ -1,4 +1,4 @@
-# Smart Document Folder System - macOS Dependencies
+# Sift - macOS Dependencies
 # Python 3.10+ required
 # 
 # Prerequisites (install via Homebrew):

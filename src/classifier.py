@@ -1,5 +1,5 @@
 """
-Classification module for Smart Document Folder System.
+Classification module for Sift.
 
 Orchestrates the classification process using text extraction (fast) for documents
 and vision model (slower) for image files.
@@ -245,7 +245,7 @@ class DocumentClassifier:
         This ensures the LLM sees the user's actual folder organization.
         
         Includes:
-        - All top-level folders in SmartFolder (except Inbox, .temp, Needs_Review)
+        - All top-level folders in Sift (except Inbox, .temp, Needs_Review)
         - All subfolders within each category
         
         Returns:

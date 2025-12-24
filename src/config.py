@@ -1,5 +1,5 @@
 """
-Configuration management for Smart Document Folder System.
+Configuration management for Sift.
 
 Handles loading, validation, and access to configuration settings from YAML files.
 """
@@ -219,7 +219,7 @@ class BehaviorConfig:
 class LoggingConfig:
     """Logging configuration."""
     level: str = "INFO"
-    log_file: str = "logs/smart_folder.log"
+    log_file: str = "logs/sift.log"
     max_log_size_mb: int = 10
     backup_count: int = 5
 
@@ -228,7 +228,7 @@ class LoggingConfig:
         """Create from dictionary."""
         return cls(
             level=data.get('level', 'INFO'),
-            log_file=data.get('log_file', 'logs/smart_folder.log'),
+            log_file=data.get('log_file', 'logs/sift.log'),
             max_log_size_mb=data.get('max_log_size_mb', 10),
             backup_count=data.get('backup_count', 5)
         )
@@ -349,7 +349,7 @@ class Config:
     def _create_default(cls) -> 'Config':
         """Create default configuration."""
         username = os.environ.get('USERNAME', os.environ.get('USER', 'User'))
-        base_path = Path.home() / "Documents" / "SmartFolder"
+        base_path = Path.home() / "Documents" / "Sift"
         
         return cls(
             folders=FoldersConfig(

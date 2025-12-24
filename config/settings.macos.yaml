@@ -1,6 +1,6 @@
-# Smart Document Folder Configuration - macOS
-# ============================================
-# Edit this file to customize the behavior of the Smart Document Folder System.
+# Sift Configuration - macOS
+# ==========================
+# Edit this file to customize the behavior of Sift.
 # Make sure to restart the application after making changes.
 #
 # Before using, rename this file to settings.yaml
@@ -10,11 +10,11 @@
 # {username} will be replaced with your macOS username
 folders:
   # Folder to watch for new documents (drop zone)
-  watch_path: "/Users/{username}/Documents/SmartFolder/Inbox"
+  watch_path: "/Users/{username}/Documents/Sift/Inbox"
   # Base folder where organized documents will be stored
-  base_path: "/Users/{username}/Documents/SmartFolder"
+  base_path: "/Users/{username}/Documents/Sift"
   # Temporary folder for document processing
-  temp_path: "/Users/{username}/Documents/SmartFolder/.temp"
+  temp_path: "/Users/{username}/Documents/Sift/.temp"
 
 # LMStudio Configuration
 # ----------------------

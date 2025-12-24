@@ -1,5 +1,5 @@
 """
-Dashboard module for Smart Document Folder System.
+Dashboard module for Sift.
 
 Provides a local web interface for:
 - Viewing recent document activity

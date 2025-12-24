@@ -1,5 +1,5 @@
 """
-Install SmartFolder to run automatically at Windows startup.
+Install Sift to run automatically at Windows startup.
 
 This script:
 1. Creates a VBS launcher for silent background execution
@@ -39,7 +39,7 @@ def get_desktop_folder() -> Path:
 
 def create_vbs_launcher(project_root: Path) -> Path:
     """Create VBS script for silent background execution."""
-    vbs_path = project_root / "SmartFolder_Background.vbs"
+    vbs_path = project_root / "Sift_Background.vbs"
     
     # VBS script that:
     # 1. Checks if already running (prevents duplicates)
@@ -48,7 +48,7 @@ def create_vbs_launcher(project_root: Path) -> Path:
     # 4. Handles paths correctly
     
     vbs_content = f'''
-' SmartFolder Background Launcher
+' Sift Background Launcher
 ' Runs the Smart Document Folder System silently in the background
 
 Option Explicit
@@ -71,7 +71,7 @@ intRunning = 0
 Set colProcesses = objWMI.ExecQuery("SELECT * FROM Win32_Process WHERE Name = 'python.exe'")
 For Each objProcess In colProcesses
     If InStr(objProcess.CommandLine, "main.py") > 0 Then
-        If InStr(objProcess.CommandLine, "SmartFolder") > 0 Then
+        If InStr(objProcess.CommandLine, "Sift") > 0 Then
             intRunning = 1
             Exit For
         End If
@@ -85,8 +85,8 @@ End If
 
 ' Check if Python exists
 If Not objFSO.FileExists(strPython) Then
-    MsgBox "SmartFolder Error: Python virtual environment not found." & vbCrLf & _
-           "Please run install.bat first.", vbCritical, "SmartFolder"
+    MsgBox "Sift Error: Python virtual environment not found." & vbCrLf & _
+           "Please run install.bat first.", vbCritical, "Sift"
     WScript.Quit
 End If
 
@@ -110,7 +110,7 @@ objShell.Run strCommand, 0, False
 def create_startup_shortcut(vbs_path: Path) -> Path:
     """Create shortcut in Windows Startup folder."""
     startup_folder = get_startup_folder()
-    shortcut_path = startup_folder / "SmartFolder.lnk"
+    shortcut_path = startup_folder / "Sift.lnk"
     
     # Use PowerShell to create shortcut (more reliable than win32com)
     ps_script = f'''
@@ -133,7 +133,7 @@ $Shortcut.Save()
 def create_dashboard_shortcut(project_root: Path) -> Path:
     """Create desktop shortcut to open the dashboard."""
     desktop_folder = get_desktop_folder()
-    shortcut_path = desktop_folder / "SmartFolder Dashboard.lnk"
+    shortcut_path = desktop_folder / "Sift Dashboard.lnk"
     
     # Create a small batch file that opens the dashboard
     dashboard_bat = project_root / "open_dashboard.bat"
@@ -149,7 +149,7 @@ $WshShell = New-Object -ComObject WScript.Shell
 $Shortcut = $WshShell.CreateShortcut("{shortcut_path}")
 $Shortcut.TargetPath = "{dashboard_bat}"
 $Shortcut.WorkingDirectory = "{project_root}"
-$Shortcut.Description = "Open SmartFolder Dashboard"
+$Shortcut.Description = "Open Sift Dashboard"
 $Shortcut.IconLocation = "shell32.dll,21"
 $Shortcut.Save()
 '''
@@ -177,7 +177,7 @@ def create_inbox_shortcut(config_path: Path) -> Path:
         inbox_path.mkdir(parents=True, exist_ok=True)
     
     desktop_folder = get_desktop_folder()
-    shortcut_path = desktop_folder / "SmartFolder Inbox.lnk"
+    shortcut_path = desktop_folder / "Sift Inbox.lnk"
     
     ps_script = f'''
 $WshShell = New-Object -ComObject WScript.Shell
@@ -196,23 +196,23 @@ $Shortcut.Save()
 
 
 def remove_startup():
-    """Remove SmartFolder from Windows startup."""
+    """Remove Sift from Windows startup."""
     startup_folder = get_startup_folder()
-    shortcut_path = startup_folder / "SmartFolder.lnk"
+    shortcut_path = startup_folder / "Sift.lnk"
     
     if shortcut_path.exists():
         shortcut_path.unlink()
         print(f"Removed: {shortcut_path}")
         return True
     else:
-        print("SmartFolder is not configured to run at startup.")
+        print("Sift is not configured to run at startup.")
         return False
 
 
 def main():
     import argparse
     
-    parser = argparse.ArgumentParser(description="SmartFolder Startup Installer")
+    parser = argparse.ArgumentParser(description="Sift Startup Installer")
     parser.add_argument('--remove', action='store_true', help='Remove from startup')
     parser.add_argument('--no-desktop', action='store_true', help='Skip desktop shortcuts')
     args = parser.parse_args()
@@ -225,7 +225,7 @@ def main():
         return
     
     print("=" * 50)
-    print("SmartFolder Startup Installer")
+    print("Sift Startup Installer")
     print("=" * 50)
     print()
     
@@ -260,13 +260,13 @@ def main():
     print("Installation complete!")
     print("=" * 50)
     print()
-    print("SmartFolder will now start automatically when you log in.")
+    print("Sift will now start automatically when you log in.")
     print()
     print("Desktop shortcuts created:")
-    print("  - 'SmartFolder Dashboard' - Opens the web dashboard")
-    print("  - 'SmartFolder Inbox' - Drop documents here")
+    print("  - 'Sift Dashboard' - Opens the web dashboard")
+    print("  - 'Sift Inbox' - Drop documents here")
     print()
-    print("To start SmartFolder now, run:")
+    print("To start Sift now, run:")
     print(f"  wscript \"{vbs_path}\"")
     print()
     print("To remove from startup, run:")
@@ -275,16 +275,16 @@ def main():
     
     # Offer to start now (handle non-interactive mode)
     try:
-        response = input("Start SmartFolder now? [Y/n]: ").strip().lower()
+        response = input("Start Sift now? [Y/n]: ").strip().lower()
         if response != 'n':
             import subprocess
             subprocess.Popen(["wscript", str(vbs_path)])
-            print("SmartFolder started! Check the dashboard at http://localhost:5000")
+            print("Sift started! Check the dashboard at http://localhost:5000")
     except EOFError:
         # Non-interactive mode, start automatically
         import subprocess
         subprocess.Popen(["wscript", str(vbs_path)])
-        print("SmartFolder started in background!")
+        print("Sift started in background!")
     
     return 0
 

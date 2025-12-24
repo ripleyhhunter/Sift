@@ -1,5 +1,5 @@
 """
-LMStudio API client for Smart Document Folder System.
+LMStudio API client for Sift.
 
 Interfaces with LMStudio's OpenAI-compatible API for document classification.
 Supports both text-based (fast) and vision-based (for images) classification.

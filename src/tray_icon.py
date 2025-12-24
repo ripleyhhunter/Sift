@@ -1,5 +1,5 @@
 """
-System tray icon module for Smart Document Folder System.
+System tray icon module for Sift.
 
 Provides:
 - System tray icon with status indicator
@@ -60,12 +60,12 @@ else:
 
 class TrayIcon:
     """
-    System tray icon for Smart Folder.
+    System tray icon for Sift.
     
     Provides visual status indicator and control menu.
     """
     
-    APP_NAME = "Smart Folder"
+    APP_NAME = "Sift"
     
     def __init__(
         self,
@@ -119,7 +119,7 @@ class TrayIcon:
             
             # Create menu
             menu = pystray.Menu(
-                Item("Smart Folder", None, enabled=False),
+                Item("Sift", None, enabled=False),
                 Item("─────────────", None, enabled=False),
                 Item("Open Dashboard", self._open_dashboard),
                 Item("Open Inbox Folder", self._open_inbox),
@@ -134,9 +134,9 @@ class TrayIcon:
             
             # Create and run icon
             self._icon = pystray.Icon(
-                "smart_folder",
+                "sift",
                 image,
-                "Smart Folder - Running",
+                "Sift - Running",
                 menu
             )
             
@@ -201,7 +201,7 @@ class TrayIcon:
         if self._icon:
             try:
                 self._icon.icon = self._create_icon_image(color)
-                self._icon.title = f"Smart Folder - {status}"
+                self._icon.title = f"Sift - {status}"
             except Exception as e:
                 logger.debug(f"Error updating tray icon: {e}")
     
@@ -254,7 +254,7 @@ class TrayIcon:
     def notify_startup(self) -> None:
         """Show startup notification."""
         self.notify(
-            title="Smart Folder Started",
+            title="Sift Started",
             message="Drop documents in the Inbox folder to organize them automatically.",
             icon_type="info"
         )
@@ -278,10 +278,10 @@ class TrayIcon:
         
         if self._paused:
             self.update_status("Paused", "yellow")
-            self.notify("Smart Folder Paused", "Document processing is paused.")
+            self.notify("Sift Paused", "Document processing is paused.")
         else:
             self.update_status("Running", "green")
-            self.notify("Smart Folder Resumed", "Document processing resumed.")
+            self.notify("Sift Resumed", "Document processing resumed.")
     
     @property
     def is_paused(self) -> bool:
@@ -322,7 +322,7 @@ def _create_startup_windows() -> bool:
             from win32com.client import Dispatch
             
             startup_folder = winshell.startup()
-            shortcut_path = os.path.join(startup_folder, "Smart Folder.lnk")
+            shortcut_path = os.path.join(startup_folder, "Sift.lnk")
             
             project_root = Path(__file__).parent.parent
             pythonw = project_root / "venv" / "Scripts" / "pythonw.exe"
@@ -334,7 +334,7 @@ def _create_startup_windows() -> bool:
             shortcut.Targetpath = str(pythonw)
             shortcut.Arguments = f'"{main_script}" --background'
             shortcut.WorkingDirectory = str(project_root)
-            shortcut.Description = "Smart Document Folder System"
+            shortcut.Description = "Sift - AI Document Organization"
             
             if icon_path.exists():
                 shortcut.IconLocation = str(icon_path)
@@ -357,7 +357,7 @@ def create_startup_shortcut_vbs() -> bool:
             "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
         
         project_root = Path(__file__).parent.parent
-        vbs_path = startup_folder / "SmartFolder.vbs"
+        vbs_path = startup_folder / "Sift.vbs"
         
         pythonw = project_root / "venv" / "Scripts" / "pythonw.exe"
         main_script = project_root / "src" / "main.py"
@@ -383,7 +383,7 @@ def _create_startup_macos() -> bool:
         launch_agents = Path.home() / "Library" / "LaunchAgents"
         launch_agents.mkdir(parents=True, exist_ok=True)
         
-        plist_path = launch_agents / "com.smartfolder.app.plist"
+        plist_path = launch_agents / "com.sift.app.plist"
         project_root = Path(__file__).parent.parent
         python_path = project_root / "venv" / "bin" / "python"
         main_script = project_root / "src" / "main.py"
@@ -393,7 +393,7 @@ def _create_startup_macos() -> bool:
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.smartfolder.app</string>
+    <string>com.sift.app</string>
     <key>ProgramArguments</key>
     <array>
         <string>{python_path}</string>
@@ -425,12 +425,12 @@ def _create_startup_linux() -> bool:
         autostart_dir = Path.home() / ".config" / "autostart"
         autostart_dir.mkdir(parents=True, exist_ok=True)
         
-        desktop_path = autostart_dir / "smartfolder.desktop"
+        desktop_path = autostart_dir / "sift.desktop"
         project_root = Path(__file__).parent.parent
         
         desktop_content = f'''[Desktop Entry]
 Type=Application
-Name=Smart Folder
+Name=Sift
 Comment=AI-powered document organization
 Exec={project_root}/run_background.sh
 Path={project_root}
@@ -458,18 +458,18 @@ def remove_startup_shortcut() -> bool:
         if IS_WINDOWS:
             startup_folder = Path(os.environ.get('APPDATA', '')) / \
                 "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
-            for filename in ["Smart Folder.lnk", "SmartFolder.vbs"]:
+            for filename in ["Sift.lnk", "Sift.vbs"]:
                 path = startup_folder / filename
                 if path.exists():
                     path.unlink()
                     logger.info(f"Removed startup file: {path}")
         elif IS_MACOS:
-            plist_path = Path.home() / "Library" / "LaunchAgents" / "com.smartfolder.app.plist"
+            plist_path = Path.home() / "Library" / "LaunchAgents" / "com.sift.app.plist"
             if plist_path.exists():
                 plist_path.unlink()
                 logger.info(f"Removed LaunchAgent: {plist_path}")
         elif IS_LINUX:
-            desktop_path = Path.home() / ".config" / "autostart" / "smartfolder.desktop"
+            desktop_path = Path.home() / ".config" / "autostart" / "sift.desktop"
             if desktop_path.exists():
                 desktop_path.unlink()
                 logger.info(f"Removed autostart entry: {desktop_path}")
@@ -491,13 +491,13 @@ def is_startup_enabled() -> bool:
     if IS_WINDOWS:
         startup_folder = Path(os.environ.get('APPDATA', '')) / \
             "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
-        return (startup_folder / "Smart Folder.lnk").exists() or \
-               (startup_folder / "SmartFolder.vbs").exists()
+        return (startup_folder / "Sift.lnk").exists() or \
+               (startup_folder / "Sift.vbs").exists()
     elif IS_MACOS:
-        plist_path = Path.home() / "Library" / "LaunchAgents" / "com.smartfolder.app.plist"
+        plist_path = Path.home() / "Library" / "LaunchAgents" / "com.sift.app.plist"
         return plist_path.exists()
     elif IS_LINUX:
-        desktop_path = Path.home() / ".config" / "autostart" / "smartfolder.desktop"
+        desktop_path = Path.home() / ".config" / "autostart" / "sift.desktop"
         return desktop_path.exists()
     return False
 

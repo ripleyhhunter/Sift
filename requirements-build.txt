@@ -1,4 +1,4 @@
-# Build dependencies for creating the distributable package
+# Sift - Build dependencies for creating the distributable package
 # Install with: pip install -r requirements-build.txt
 
 pyinstaller>=6.0.0

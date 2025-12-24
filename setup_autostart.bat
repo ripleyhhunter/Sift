@@ -1,6 +1,6 @@
 @echo off
 echo ============================================
-echo SmartFolder Auto-Start Setup
+echo Sift Auto-Start Setup
 echo ============================================
 echo.
 
@@ -15,7 +15,7 @@ if not exist "venv\Scripts\python.exe" (
 )
 
 REM Run the installer
-echo Installing SmartFolder to run at Windows startup...
+echo Installing Sift to run at Windows startup...
 echo.
 venv\Scripts\python.exe install_startup.py
 

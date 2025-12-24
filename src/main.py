@@ -1,5 +1,5 @@
 """
-Main application entry point for Smart Document Folder System.
+Main application entry point for Sift.
 
 Orchestrates all components and provides CLI interface.
 """
@@ -36,9 +36,9 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-class SmartDocumentFolder:
+class Sift:
     """
-    Main application class for Smart Document Folder System.
+    Main application class for Sift.
     
     Coordinates all components and manages the application lifecycle.
     """
@@ -92,7 +92,7 @@ class SmartDocumentFolder:
         self.background_mode = background
         
         logger.info("=" * 60)
-        logger.info("Smart Document Folder System - Starting")
+        logger.info("Sift - Starting")
         if background:
             logger.info("Running in background mode with system tray")
         logger.info("=" * 60)
@@ -116,8 +116,8 @@ class SmartDocumentFolder:
             if self.tray_icon:
                 self.tray_icon.update_status("LMStudio Offline", "red")
                 self.tray_icon.notify(
-                    "Smart Folder - LMStudio Required",
-                    "Please start LMStudio and load a model, then restart Smart Folder.",
+                    "Sift - LMStudio Required",
+                    "Please start LMStudio and load a model, then restart Sift.",
                     "error"
                 )
             return
@@ -195,7 +195,7 @@ class SmartDocumentFolder:
         if self.tray_icon:
             self.tray_icon.stop()
         
-        logger.info("Smart Document Folder System - Stopped")
+        logger.info("Sift - Stopped")
     
     def _process_file(self, file_path: Path) -> None:
         """
@@ -351,7 +351,7 @@ class SmartDocumentFolder:
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Smart Document Folder System - AI-powered document organization",
+        description="Sift - AI-powered document organization",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -477,7 +477,7 @@ def main() -> int:
             logger.info("Configuration OK")
         
         # Check LMStudio
-        app = SmartDocumentFolder(config, project_root)
+        app = Sift(config, project_root)
         if app.llm_client.is_available():
             models = app.llm_client.get_loaded_models()
             logger.info(f"LMStudio OK. Models: {models}")
@@ -503,7 +503,7 @@ def main() -> int:
     # Startup management
     if args.enable_startup:
         if create_startup_shortcut_vbs():
-            print("[OK] Auto-start enabled. Smart Folder will start automatically when Windows starts.")
+            print("[OK] Auto-start enabled. Sift will start automatically when Windows starts.")
             print("     To disable: python src\\main.py --disable-startup")
         else:
             print("[ERROR] Failed to enable auto-start.")
@@ -511,7 +511,7 @@ def main() -> int:
     
     if args.disable_startup:
         if remove_startup_shortcut():
-            print("[OK] Auto-start disabled. Smart Folder will no longer start automatically.")
+            print("[OK] Auto-start disabled. Sift will no longer start automatically.")
         else:
             print("[ERROR] Failed to disable auto-start.")
         return 0
@@ -519,14 +519,14 @@ def main() -> int:
     if args.startup_status:
         if is_startup_enabled():
             print("[ENABLED] Auto-start is enabled")
-            print("          Smart Folder will start automatically when Windows starts.")
+            print("          Sift will start automatically when Windows starts.")
         else:
             print("[DISABLED] Auto-start is disabled")
             print("           To enable: python src\\main.py --enable-startup")
         return 0
     
     # Create application
-    app = SmartDocumentFolder(config, project_root)
+    app = Sift(config, project_root)
     
     # Setup signal handlers
     def signal_handler(sig, frame):

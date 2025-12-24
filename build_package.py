@@ -1,5 +1,5 @@
 """
-Build script to create a distributable package of Smart Document Folder System.
+Build script to create a distributable package of Sift.
 
 This script:
 1. Uses PyInstaller to create a standalone executable
@@ -44,7 +44,7 @@ def build_executable():
     # PyInstaller command
     cmd = [
         sys.executable, "-m", "PyInstaller",
-        "--name", "SmartFolder",
+        "--name", "Sift",
         "--onedir",  # Create a folder with exe and dependencies (more reliable)
         "--console",  # Keep console for logging (can change to --windowed later)
         "--noconfirm",  # Overwrite without asking
@@ -70,8 +70,8 @@ def create_distribution_package():
     print("Creating distribution package...")
     print("="*60 + "\n")
     
-    dist_dir = Path("dist/SmartFolder")
-    package_dir = Path("dist/SmartFolder_Package")
+    dist_dir = Path("dist/Sift")
+    package_dir = Path("dist/Sift_Package")
     
     # Clean and create package directory
     if package_dir.exists():
@@ -80,18 +80,18 @@ def create_distribution_package():
     
     # Copy the built executable folder
     print("Copying executable...")
-    shutil.copytree(dist_dir, package_dir / "SmartFolder")
+    shutil.copytree(dist_dir, package_dir / "Sift")
     
     # Copy config folder
     print("Copying configuration...")
     config_src = Path("config")
-    config_dst = package_dir / "SmartFolder" / "config"
+    config_dst = package_dir / "Sift" / "config"
     if config_src.exists():
         shutil.copytree(config_src, config_dst)
     
     # Create logs and temp directories
-    (package_dir / "SmartFolder" / "logs").mkdir(exist_ok=True)
-    (package_dir / "SmartFolder" / "temp").mkdir(exist_ok=True)
+    (package_dir / "Sift" / "logs").mkdir(exist_ok=True)
+    (package_dir / "Sift" / "temp").mkdir(exist_ok=True)
     
     # Copy setup files
     print("Copying setup files...")
@@ -110,7 +110,7 @@ def create_distribution_package():
     
     # Create the ZIP file
     print("\nCreating ZIP archive...")
-    zip_path = Path("dist/SmartFolder_Windows")
+    zip_path = Path("dist/Sift_Windows")
     shutil.make_archive(str(zip_path), 'zip', package_dir)
     
     print(f"\n[OK] Package created: {zip_path}.zip")
@@ -121,7 +121,7 @@ def create_distribution_package():
 
 def main():
     print("="*60)
-    print("Smart Document Folder System - Build Package")
+    print("Sift - Build Package")
     print("="*60)
     
     # Check/install PyInstaller

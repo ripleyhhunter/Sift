@@ -1,5 +1,5 @@
 """
-Platform-specific utilities for Smart Document Folder System.
+Platform-specific utilities for Sift.
 
 Provides cross-platform abstractions for Windows, macOS, and Linux.
 """
@@ -103,7 +103,7 @@ def get_libreoffice_path() -> Optional[str]:
 
 def get_default_base_path() -> Path:
     """
-    Get the default base path for SmartFolder data.
+    Get the default base path for Sift data.
     
     Returns:
         Platform-appropriate documents path
@@ -112,12 +112,12 @@ def get_default_base_path() -> Path:
         # Use OneDrive Documents if available, otherwise regular Documents
         onedrive = os.environ.get('OneDrive')
         if onedrive:
-            return Path(onedrive) / 'Documents' / 'SmartFolder'
-        return Path.home() / 'Documents' / 'SmartFolder'
+            return Path(onedrive) / 'Documents' / 'Sift'
+        return Path.home() / 'Documents' / 'Sift'
     elif IS_MACOS:
-        return Path.home() / 'Documents' / 'SmartFolder'
+        return Path.home() / 'Documents' / 'Sift'
     else:  # Linux
-        return Path.home() / 'Documents' / 'SmartFolder'
+        return Path.home() / 'Documents' / 'Sift'
 
 
 def get_startup_folder() -> Optional[Path]:
@@ -148,9 +148,9 @@ def get_config_path() -> Path:
         Path to config directory
     """
     if IS_WINDOWS:
-        return Path(os.environ.get('APPDATA', Path.home())) / 'SmartFolder'
+        return Path(os.environ.get('APPDATA', Path.home())) / 'Sift'
     elif IS_MACOS:
-        return Path.home() / 'Library' / 'Application Support' / 'SmartFolder'
+        return Path.home() / 'Library' / 'Application Support' / 'Sift'
     else:  # Linux
         config_home = os.environ.get('XDG_CONFIG_HOME', str(Path.home() / '.config'))
         return Path(config_home) / 'smartfolder'

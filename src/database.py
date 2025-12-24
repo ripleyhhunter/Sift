@@ -1,5 +1,5 @@
 """
-Database module for Smart Document Folder System.
+Database module for Sift.
 
 Provides SQLite-based persistence for document tracking,
 activity logging, and history management.

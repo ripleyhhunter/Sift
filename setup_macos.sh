@@ -1,8 +1,8 @@
 #!/bin/bash
 # ============================================================
-# Smart Document Folder System - macOS Setup Script
+# Sift - macOS Setup Script
 # ============================================================
-# This script sets up the Smart Folder application on macOS
+# This script sets up the Sift application on macOS
 #
 # Prerequisites:
 #   - macOS 11 (Big Sur) or later
@@ -24,7 +24,7 @@ NC='\033[0m' # No Color
 
 echo ""
 echo "============================================================"
-echo "   Smart Document Folder System - macOS Setup"
+echo "   Sift - macOS Setup"
 echo "============================================================"
 echo ""
 
@@ -135,9 +135,9 @@ else
     print_warning "Configuration already exists, skipping..."
 fi
 
-# Create SmartFolder directory structure
-print_status "Creating SmartFolder directories..."
-SMARTFOLDER_BASE="$HOME/Documents/SmartFolder"
+# Create Sift directory structure
+print_status "Creating Sift directories..."
+SMARTFOLDER_BASE="$HOME/Documents/Sift"
 mkdir -p "$SMARTFOLDER_BASE/Inbox"
 mkdir -p "$SMARTFOLDER_BASE/.temp"
 print_success "Created $SMARTFOLDER_BASE"
@@ -158,21 +158,21 @@ fi
 
 # Create run script
 print_status "Creating run script..."
-cat > run_smartfolder.sh << 'EOF'
+cat > run_sift.sh << 'EOF'
 #!/bin/bash
-# Run Smart Folder
+# Run Sift
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 source venv/bin/activate
 python -m src.main "$@"
 EOF
-chmod +x run_smartfolder.sh
-print_success "Created run_smartfolder.sh"
+chmod +x run_sift.sh
+print_success "Created run_sift.sh"
 
 # Create background run script
 cat > run_background.sh << 'EOF'
 #!/bin/bash
-# Run Smart Folder in background with system tray
+# Run Sift in background with system tray
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 source venv/bin/activate
@@ -192,11 +192,11 @@ echo ""
 echo "  1. Install LMStudio from: https://lmstudio.ai"
 echo "  2. In LMStudio, download a model (e.g., qwen/qwen3-1.7b)"
 echo "  3. Go to Developer tab → Start Server"
-echo "  4. Run Smart Folder:"
+echo "  4. Run Sift:"
 echo ""
-echo "     ./run_smartfolder.sh"
+echo "     ./run_sift.sh"
 echo ""
-echo "  5. Drop documents in: ~/Documents/SmartFolder/Inbox"
+echo "  5. Drop documents in: ~/Documents/Sift/Inbox"
 echo ""
 echo "Optional: Edit config/settings.yaml to customize categories"
 echo ""

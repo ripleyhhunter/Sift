@@ -1,6 +1,6 @@
 @echo off
 echo ========================================
-echo Smart Folder - Enable Auto-Start
+echo Sift - Enable Auto-Start
 echo ========================================
 echo.
 
@@ -17,7 +17,7 @@ venv\Scripts\python.exe src\main.py --enable-startup
 
 echo.
 echo ========================================
-echo Smart Folder will now start automatically when Windows starts.
+echo Sift will now start automatically when Windows starts.
 echo.
 echo To start it now, run: run.bat
 echo To disable auto-start, run: disable_auto_start.bat

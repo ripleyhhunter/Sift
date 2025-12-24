@@ -11,8 +11,8 @@ set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%"
 
 :: Check if running from the package directory
-if not exist "SmartFolder\SmartFolder.exe" (
-    echo ERROR: SmartFolder.exe not found!
+if not exist "Sift\Sift.exe" (
+    echo ERROR: Sift.exe not found!
     echo Please run this script from the extracted package folder.
     pause
     exit /b 1
@@ -51,7 +51,7 @@ if exist "poppler\Library\bin\pdftoppm.exe" (
 )
 
 echo.
-echo Step 2: Setting up SmartFolder directory...
+echo Step 2: Setting up Sift directory...
 echo.
 
 :: Get the current user's Documents folder
@@ -70,9 +70,9 @@ if exist "%USERPROFILE%\OneDrive\Documents" (
     )
 )
 
-set "SMARTFOLDER_PATH=%DOCS_FOLDER%\SmartFolder"
+set "SMARTFOLDER_PATH=%DOCS_FOLDER%\Sift"
 
-echo Creating SmartFolder at: %SMARTFOLDER_PATH%
+echo Creating Sift at: %SMARTFOLDER_PATH%
 echo.
 
 :: Create the directory structure
@@ -96,11 +96,11 @@ echo Step 3: Updating configuration...
 echo.
 
 :: Update the settings.yaml with the correct paths
-set "CONFIG_FILE=%SCRIPT_DIR%SmartFolder\config\settings.yaml"
-set "TEMP_FILE=%SCRIPT_DIR%SmartFolder\config\settings_temp.yaml"
+set "CONFIG_FILE=%SCRIPT_DIR%Sift\config\settings.yaml"
+set "TEMP_FILE=%SCRIPT_DIR%Sift\config\settings_temp.yaml"
 
 :: Use PowerShell to update the YAML file
-powershell -Command "$content = Get-Content '%CONFIG_FILE%' -Raw; $content = $content -replace 'C:\\Users\\{username}\\OneDrive\\Documents\\SmartFolder', '%SMARTFOLDER_PATH:\=\\%'; $content = $content -replace 'C:\\Users\\{username}\\Documents\\SmartFolder', '%SMARTFOLDER_PATH:\=\\%'; $content | Set-Content '%CONFIG_FILE%'"
+powershell -Command "$content = Get-Content '%CONFIG_FILE%' -Raw; $content = $content -replace 'C:\\Users\\{username}\\OneDrive\\Documents\\Sift', '%SMARTFOLDER_PATH:\=\\%'; $content = $content -replace 'C:\\Users\\{username}\\Documents\\Sift', '%SMARTFOLDER_PATH:\=\\%'; $content | Set-Content '%CONFIG_FILE%'"
 
 echo Configuration updated!
 
@@ -109,7 +109,7 @@ echo Step 4: Creating desktop shortcut...
 echo.
 
 :: Create a shortcut on the desktop
-set "SHORTCUT_PATH=%USERPROFILE%\Desktop\Smart Folder.lnk"
+set "SHORTCUT_PATH=%USERPROFILE%\Desktop\Sift.lnk"
 set "TARGET_PATH=%SCRIPT_DIR%run_smartfolder.bat"
 
 powershell -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%SHORTCUT_PATH%'); $s.TargetPath = '%TARGET_PATH%'; $s.WorkingDirectory = '%SCRIPT_DIR%'; $s.Description = 'Smart Document Folder System'; $s.Save()"
@@ -121,13 +121,13 @@ echo ============================================================
 echo  SETUP COMPLETE!
 echo ============================================================
 echo.
-echo Your SmartFolder is at: %SMARTFOLDER_PATH%
+echo Your Sift is at: %SMARTFOLDER_PATH%
 echo.
 echo NEXT STEPS:
 echo   1. Install LMStudio from https://lmstudio.ai
 echo   2. Download the qwen/qwen3-4b model in LMStudio
 echo   3. Start the LMStudio server (Developer tab)
-echo   4. Double-click "Smart Folder" on your desktop to start!
+echo   4. Double-click "Sift" on your desktop to start!
 echo.
 echo Drop documents in: %SMARTFOLDER_PATH%\Inbox
 echo.

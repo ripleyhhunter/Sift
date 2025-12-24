@@ -1,10 +1,10 @@
 # Smart Document Folder System - macOS Setup Guide
 
-Welcome! This guide will help you set up Smart Folder on your Mac.
+Welcome! This guide will help you set up Sift on your Mac.
 
-## What is Smart Folder?
+## What is Sift?
 
-Smart Folder is an AI-powered document organization system that:
+Sift is an AI-powered document organization system that:
 - Watches your Inbox folder for new documents
 - Uses a local AI model to understand what each document is about
 - Automatically moves documents to the appropriate category folder
@@ -28,11 +28,11 @@ Before starting, you need:
 ### Step 1: Extract the Files
 
 1. Extract the ZIP file you received
-2. Move the `SmartFolder` folder to a convenient location (e.g., your home folder or Applications)
+2. Move the `Sift` folder to a convenient location (e.g., your home folder or Applications)
 3. Open Terminal (press `Cmd + Space`, type "Terminal", press Enter)
-4. Navigate to the SmartFolder folder:
+4. Navigate to the Sift folder:
    ```bash
-   cd ~/SmartFolder  # or wherever you placed it
+   cd ~/Sift  # or wherever you placed it
    ```
 
 ### Step 2: Run the Setup Script
@@ -50,7 +50,7 @@ This will automatically:
 - Install libmagic for file type detection
 - Create a Python virtual environment
 - Install all dependencies
-- Create your SmartFolder directory structure
+- Create your Sift directory structure
 
 ### Step 3: Install LMStudio
 
@@ -74,35 +74,35 @@ LMStudio is a free application that runs AI models locally on your Mac.
 3. Click **Start Server**
 4. You should see "Server running on port 1234" message
 
-### Step 6: Run Smart Folder
+### Step 6: Run Sift
 
-In Terminal, from the SmartFolder directory:
+In Terminal, from the Sift directory:
 
 ```bash
-./run_smartfolder.sh
+./run_sift.sh
 ```
 
 You should see:
 ```
 Smart Document Folder System - Starting
 LMStudio connected.
-Watching folder: /Users/yourname/Documents/SmartFolder/Inbox
+Watching folder: /Users/yourname/Documents/Sift/Inbox
 ```
 
 ### Step 7: Test It!
 
 1. Find any document (PDF, Word doc, image, etc.)
-2. Copy or move it to `~/Documents/SmartFolder/Inbox`
-3. Watch Smart Folder automatically classify and organize it!
+2. Copy or move it to `~/Documents/Sift/Inbox`
+3. Watch Sift automatically classify and organize it!
 
 ---
 
 ## Daily Usage
 
-### Starting Smart Folder
+### Starting Sift
 
 ```bash
-./run_smartfolder.sh
+./run_sift.sh
 ```
 
 ### Running in Background (with menu bar icon)
@@ -124,10 +124,10 @@ The dashboard shows:
 
 ## Folder Structure
 
-After running, your SmartFolder will look like:
+After running, your Sift will look like:
 
 ```
-~/Documents/SmartFolder/
+~/Documents/Sift/
 ├── Inbox/              ← Drop documents here
 ├── Financial/
 │   ├── Tax_Documents/
@@ -150,7 +150,7 @@ Edit `config/settings.yaml` to customize:
 - Confidence threshold
 - Which model to use
 
-After editing, restart Smart Folder for changes to take effect.
+After editing, restart Sift for changes to take effect.
 
 ---
 
@@ -178,7 +178,7 @@ brew install poppler
 
 Make sure scripts are executable:
 ```bash
-chmod +x setup_macos.sh run_smartfolder.sh run_background.sh
+chmod +x setup_macos.sh run_sift.sh run_background.sh
 ```
 
 ### App won't start
@@ -189,10 +189,10 @@ Check logs in `logs/smart_folder.log` for error details.
 
 ## Uninstalling
 
-To remove Smart Folder:
+To remove Sift:
 
-1. Delete the SmartFolder application folder
-2. Optionally delete `~/Documents/SmartFolder` (contains your organized documents)
+1. Delete the Sift application folder
+2. Optionally delete `~/Documents/Sift` (contains your organized documents)
 3. Uninstall LMStudio if no longer needed
 
 ---

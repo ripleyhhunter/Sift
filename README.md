@@ -1,8 +1,8 @@
-# SmartFolder
+# Sift
 
-An intelligent cross-platform document organization system that automatically monitors your inbox folder, analyzes documents using a local LLM (via LMStudio), and organizes them into appropriate subfolders based on content classification.
+An intelligent cross-platform document organization system that automatically monitors your inbox folder, analyzes documents using a local LLM (via LMStudio), and sifts them into appropriate subfolders based on content classification.
 
-[![Build SmartFolder](https://github.com/ripleyhhunter/SmartFolder/actions/workflows/build.yml/badge.svg)](https://github.com/ripleyhhunter/SmartFolder/actions/workflows/build.yml)
+[![Build Sift](https://github.com/ripleyhhunter/SmartFolder/actions/workflows/build.yml/badge.svg)](https://github.com/ripleyhhunter/SmartFolder/actions/workflows/build.yml)
 
 ## Features
 
@@ -28,9 +28,9 @@ Or grab build artifacts from [GitHub Actions](https://github.com/ripleyhhunter/S
 
 | Platform | Download |
 |----------|----------|
-| Windows | `SmartFolder-Windows.zip` |
-| macOS | `SmartFolder-macOS.zip` |
-| Source | `SmartFolder-Source.zip` |
+| Windows | `Sift-Windows.zip` |
+| macOS | `Sift-macOS.zip` |
+| Source | `Sift-Source.zip` |
 
 ### Prerequisites
 
@@ -44,13 +44,13 @@ Or grab build artifacts from [GitHub Actions](https://github.com/ripleyhhunter/S
 
 1. Extract the downloaded ZIP
 2. Install [Poppler for Windows](https://github.com/oschwartz10612/poppler-windows/releases) for PDF support
-3. Run `run_smartfolder.bat`
+3. Run `run_sift.bat`
 
 ### macOS Installation
 
 1. Extract the downloaded ZIP
 2. Run `./install_dependencies.sh` (installs Poppler via Homebrew)
-3. Run `./run_smartfolder.sh`
+3. Run `./run_sift.sh`
 
 ---
 
@@ -82,14 +82,14 @@ chmod +x setup_macos.sh
 ./setup_macos.sh
 
 # Start the application
-./run_smartfolder.sh
+./run_sift.sh
 ```
 
 ---
 
 ## Usage
 
-### Starting SmartFolder
+### Starting Sift
 
 **Windows:**
 ```cmd
@@ -99,7 +99,7 @@ run_background.bat         # Background mode with system tray
 
 **macOS:**
 ```bash
-./run_smartfolder.sh       # Normal mode
+./run_sift.sh              # Normal mode
 ./run_background.sh        # Background mode
 ```
 
@@ -130,8 +130,8 @@ The dashboard provides:
 
 ### How It Works
 
-1. **Drop a document** into the `Inbox` folder (`Documents/SmartFolder/Inbox`)
-2. SmartFolder **detects** the new file
+1. **Drop a document** into the `Inbox` folder (`Documents/Sift/Inbox`)
+2. Sift **detects** the new file
 3. Text is **extracted** from the document (or images for visual documents)
 4. Content is **analyzed** by your local LLM via LMStudio
 5. The document is **classified** into a category
@@ -140,7 +140,7 @@ The dashboard provides:
 ### Folder Structure
 
 ```
-SmartFolder/
+Sift/
 ├── Inbox/              ← Drop documents here
 ├── Financial/
 │   ├── Tax_Documents/
@@ -169,11 +169,11 @@ SmartFolder/
 
 ## Configuration
 
-Edit `config/settings.yaml` to customize SmartFolder.
+Edit `config/settings.yaml` to customize Sift.
 
 ### Model Profiles
 
-SmartFolder supports multiple model profiles for different speed/accuracy tradeoffs:
+Sift supports multiple model profiles for different speed/accuracy tradeoffs:
 
 ```yaml
 llm:
@@ -211,8 +211,8 @@ categories:
 
 ```yaml
 folders:
-  watch_path: "/Users/you/Documents/SmartFolder/Inbox"
-  base_path: "/Users/you/Documents/SmartFolder"
+  watch_path: "/Users/you/Documents/Sift/Inbox"
+  base_path: "/Users/you/Documents/Sift"
 
 behavior:
   confidence_threshold: 0.7  # Below this → Needs_Review
@@ -256,7 +256,7 @@ Install LibreOffice for full Office document support:
 
 ### Files Stuck in Inbox
 
-1. Check logs: `logs/smart_folder.log`
+1. Check logs: `logs/sift.log`
 2. Verify LMStudio is running with a model loaded
 3. Try processing manually: `run.bat --file "path/to/file.pdf"`
 
@@ -265,7 +265,7 @@ Install LibreOffice for full Office document support:
 ## Project Structure
 
 ```
-SmartFolder/
+Sift/
 ├── src/
 │   ├── main.py              # Application entry point
 │   ├── config.py            # Configuration management

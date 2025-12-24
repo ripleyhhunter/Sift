@@ -2,7 +2,7 @@
 setlocal
 
 echo ============================================================
-echo  Smart Document Folder System
+echo  Sift - AI Document Organization
 echo ============================================================
 echo.
 
@@ -11,14 +11,14 @@ set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%"
 
 :: Check if running from package or development
-if exist "SmartFolder\SmartFolder.exe" (
-    set "EXE_PATH=%SCRIPT_DIR%SmartFolder\SmartFolder.exe"
-    set "APP_DIR=%SCRIPT_DIR%SmartFolder"
-) else if exist "dist\SmartFolder\SmartFolder.exe" (
-    set "EXE_PATH=%SCRIPT_DIR%dist\SmartFolder\SmartFolder.exe"
-    set "APP_DIR=%SCRIPT_DIR%dist\SmartFolder"
+if exist "Sift\Sift.exe" (
+    set "EXE_PATH=%SCRIPT_DIR%Sift\Sift.exe"
+    set "APP_DIR=%SCRIPT_DIR%Sift"
+) else if exist "dist\Sift\Sift.exe" (
+    set "EXE_PATH=%SCRIPT_DIR%dist\Sift\Sift.exe"
+    set "APP_DIR=%SCRIPT_DIR%dist\Sift"
 ) else (
-    echo ERROR: SmartFolder.exe not found!
+    echo ERROR: Sift.exe not found!
     echo.
     echo If you're running from source, use: python src\main.py
     pause
@@ -49,7 +49,7 @@ if errorlevel 1 (
     pause >nul
 )
 
-echo Starting Smart Folder...
+echo Starting Sift...
 echo.
 echo Drop documents into your Inbox folder and they will be
 echo automatically organized!

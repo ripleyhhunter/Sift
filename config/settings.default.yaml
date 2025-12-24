@@ -1,6 +1,6 @@
-# Smart Document Folder Configuration
-# ====================================
-# Edit this file to customize the behavior of the Smart Document Folder System.
+# Sift Configuration
+# ==================
+# Edit this file to customize the behavior of Sift.
 # Make sure to restart the application after making changes.
 
 # Folder Paths
@@ -8,11 +8,11 @@
 # Paths will be automatically configured during setup
 folders:
   # Folder to watch for new documents (drop zone)
-  watch_path: "C:\\Users\\{username}\\Documents\\SmartFolder\\Inbox"
+  watch_path: "C:\\Users\\{username}\\Documents\\Sift\\Inbox"
   # Base folder where organized documents will be stored
-  base_path: "C:\\Users\\{username}\\Documents\\SmartFolder"
+  base_path: "C:\\Users\\{username}\\Documents\\Sift"
   # Temporary folder for document processing
-  temp_path: "C:\\Users\\{username}\\Documents\\SmartFolder\\.temp"
+  temp_path: "C:\\Users\\{username}\\Documents\\Sift\\.temp"
 
 # LMStudio Configuration
 # ----------------------
@@ -166,7 +166,7 @@ logging:
   # Log level: DEBUG, INFO, WARNING, ERROR
   level: "INFO"
   # Log file path (relative to application directory)
-  log_file: "logs/smart_folder.log"
+  log_file: "logs/sift.log"
   # Maximum log file size in MB before rotation
   max_log_size_mb: 10
   # Number of backup log files to keep

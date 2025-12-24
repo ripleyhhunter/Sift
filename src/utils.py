@@ -1,5 +1,5 @@
 """
-Utility functions for Smart Document Folder System.
+Utility functions for Sift.
 
 Contains helper functions for file operations, string manipulation,
 and other common tasks.

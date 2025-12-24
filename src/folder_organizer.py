@@ -1,5 +1,5 @@
 """
-Folder organization module for Smart Document Folder System.
+Folder organization module for Sift.
 
 Handles file movement/copying, folder creation, and filename management.
 """
@@ -348,7 +348,7 @@ class FolderOrganizer:
         Create essential folder structure only.
         
         This ONLY creates:
-        - Base SmartFolder path
+        - Base Sift path
         - Inbox (watch folder)
         - Needs_Review folder
         - Temp folder
