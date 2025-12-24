@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(venvScriptspython.exe src/main.py --help)",
+      "Bash(git add:*)"
+    ]
+  },
+  "outputStyle": "Explanatory"
+}
