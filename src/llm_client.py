@@ -30,14 +30,20 @@ THINK ABOUT THE DOCUMENT'S PURPOSE:
 2. Look at KEYWORDS in content and filename!
 
 MATCH CONTENT TO CATEGORY:
-- Running, training, workout, exercise, race, marathon, gym → Health_Fitness
+- Insurance policy, coverage, premium, claim, indemnity → Insurance
+- Tax, W2, 1099, bank statement, invoice → Financial
+- Lease, contract, agreement, legal → Legal
+- Running, workout, exercise, race, marathon, gym → Health_Fitness
 - Wedding, bride, groom, first dance, reception → Personal/Wedding
-- Electronics, circuits, ESP32, Arduino → Hobbies/Electronics (if user has it)
+- Electronics, circuits, ESP32, Arduino → Hobbies/Electronics
 - Resume, CV, job application → Work/Resumes
-- Tax, W2, 1099, bank statement → Financial
-- Lease, contract, agreement → Legal
+- Medical, doctor, prescription, diagnosis → Medical
+- Passport, license, permit, government → Government
+- Receipt, purchase confirmation → Receipts
+- Travel, flight, hotel, itinerary → Travel
 
 KEY DISTINCTION:
+- Insurance documents (policy, coverage, premium) → Insurance (NOT Health_Fitness!)
 - Sports/fitness events (races, marathons) → Health_Fitness
 - Life events (weddings, babies) → Personal
 - Don't confuse them!
@@ -57,15 +63,19 @@ REQUIRED JSON:
 PROMPT_MODERATE = """You classify documents by understanding their PURPOSE.
 
 MATCH CONTENT TO CATEGORY:
+- Insurance policy, coverage, premium, claim, indemnity, liability → Insurance
+- Tax, W2, 1099, bank statement, invoice, payment → Financial
+- Lease, rental, contract, legal agreement → Legal
+- Medical, doctor, hospital, prescription, diagnosis → Medical
 - Running, training plan, workout, exercise, race, marathon, gym → Health_Fitness
 - Wedding, bride, groom, first dance, reception, ceremony → Personal/Wedding
-- Electronics, circuits, datasheets, Arduino, ESP32 → Hobbies (if user has electronics hobby)
+- Electronics, circuits, datasheets, Arduino, ESP32 → Hobbies
 - Resume, CV, job application → Work/Resumes
-- Tax, W2, 1099, bank statement → Financial
-- Lease, rental, contract → Legal
 - Kitchen inventory, home items → Home
+- Passport, license, permit, government → Government
 
 CRITICAL DISTINCTIONS:
+- Insurance documents (policy, premium, coverage) → Insurance (NOT Health_Fitness!)
 - A "training plan" for a RACE/RUN → Health_Fitness (NOT wedding!)
 - A "training program" for a JOB → Work
 - Sports events (5K, marathon, race) → Health_Fitness

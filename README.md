@@ -61,7 +61,7 @@ Or grab build artifacts from [GitHub Actions](https://github.com/ripleyhhunter/S
 ```cmd
 # Clone the repository
 git clone https://github.com/ripleyhhunter/Sift.git
-cd SmartFolder
+cd Sift
 
 # Run the installer
 install.bat
@@ -75,7 +75,7 @@ run.bat
 ```bash
 # Clone the repository
 git clone https://github.com/ripleyhhunter/Sift.git
-cd SmartFolder
+cd Sift
 
 # Run the setup script (installs all dependencies)
 chmod +x setup_macos.sh
