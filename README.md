@@ -39,6 +39,14 @@ Or grab build artifacts from [GitHub Actions](https://github.com/ripleyhhunter/S
    - `qwen/qwen3-1.7b` (fastest, ~1.5GB)
    - `qwen/qwen3-4b` (balanced, ~3GB)
    - `qwen/qwen2.5-7b-instruct` (most accurate, ~5GB)
+3. **Poppler** - Required for PDF text extraction
+   - Windows: [Download Poppler](https://github.com/oschwartz10612/poppler-windows/releases)
+   - macOS: `brew install poppler`
+4. **LibreOffice** *(optional)* - Only needed for legacy `.doc`/`.xls` files or PowerPoint
+   - Windows: [Download LibreOffice](https://www.libreoffice.org/download/)
+   - macOS: `brew install --cask libreoffice`
+
+> **Note:** Modern Office formats (`.docx`, `.xlsx`) work without LibreOffice.
 
 ### Windows Installation
 
