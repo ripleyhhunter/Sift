@@ -99,38 +99,13 @@ You MUST respond with valid JSON only. No additional text before or after.
 - `extracted_date`: Any date found in document (YYYY-MM-DD format) or null
 - `extracted_org`: Any organization/company name found or null"""
 
-# Compact version for smaller models - same structure, less verbose
-SYSTEM_PROMPT_COMPACT = """You are Sift, a document classifier. Analyze documents and classify them into folders.
+# Ultra-compact version for small models (<2B) - minimal tokens, maximum clarity
+SYSTEM_PROMPT_COMPACT = """Classify documents into folders. Respond with JSON only.
 
-## WORKFLOW
-1. Read document metadata and content
-2. Check existing folder structure
-3. Classify into best matching folder (prefer existing folders)
-4. Respond with JSON only
+Categories: Insurance, Financial, Medical, Legal, Work, Personal, Home, Hobbies, Health_Fitness, Travel, Receipts, Education, Government
 
-## CATEGORY GUIDE
-- Insurance: policies, claims, coverage
-- Financial: tax, banking, invoices
-- Medical: doctor, prescriptions, health records
-- Legal: contracts, agreements
-- Work: employment, HR, resumes
-- Health_Fitness: workouts, gym, races (NOT insurance!)
-- Personal: identity docs, lifestyle
-- Home: household, kitchen, maintenance
-- Hobbies: crafts, collections, recipes
-
-## OUTPUT (JSON only, no other text)
-{
-  "category": "FolderName",
-  "subcategory": "SubfolderName",
-  "confidence": 0.85,
-  "document_type": "Type",
-  "summary": "Brief description",
-  "reasoning": "Why this folder",
-  "suggested_filename": "Name",
-  "extracted_date": "YYYY-MM-DD or null",
-  "extracted_org": "Org name or null"
-}"""
+Output format:
+{"category":"Folder","subcategory":"Sub","confidence":0.9,"document_type":"Type","summary":"Brief","reasoning":"Why"}"""
 
 # Map prompt styles to system prompts
 SYSTEM_PROMPTS = {
@@ -494,6 +469,19 @@ class LMStudioClient:
         Returns:
             Formatted user prompt
         """
+        # For small models, use ultra-compact format
+        if self.prompt_style == "simple":
+            # Minimal prompt for fast inference
+            folder_list = ", ".join(sorted(category_structure.keys())) if category_structure else ", ".join(sorted(existing_folders)) if existing_folders else "Financial, Insurance, Medical, Work, Personal"
+            return f"""File: {metadata.filename if metadata else filename}
+Folders: {folder_list}
+
+Content:
+{content}
+
+Classify into folder. JSON only: /no_think"""
+        
+        # For moderate/detailed models, use full structured format
         sections = []
         
         # === SECTION 1: DOCUMENT METADATA ===
@@ -517,20 +505,15 @@ class LMStudioClient:
         sections.append(f"## DOCUMENT CONTENT\n```\n{content}\n```")
         
         # === SECTION 4: TASK (varies by model size) ===
-        if self.prompt_style == "simple":
-            # Compact task for small models
+        if self.prompt_style == "moderate":
             task = """## TASK
-Classify this document. Use an existing folder if it matches, or create a new one.
-Respond with JSON only. /no_think"""
-        elif self.prompt_style == "moderate":
-            # Medium verbosity
-            task = """## TASK
-Analyze the document and classify it into the most appropriate folder.
+Classify this document into the most appropriate folder.
 
 REMEMBER:
-- Insurance policies → Insurance/ (not Health_Fitness!)
+- Insurance policies → Insurance/
+- Paystubs, tax docs → Financial/
+- Medical records → Medical/
 - Prefer existing folders when they match
-- Create new folders only when necessary
 
 Respond with JSON only. /no_think"""
         else:
@@ -539,14 +522,14 @@ Respond with JSON only. /no_think"""
 Carefully read the document content above and classify it appropriately.
 
 STEPS:
-1. Identify what type of document this is (invoice, policy, contract, etc.)
+1. Identify what type of document this is (invoice, policy, paystub, etc.)
 2. Determine its PURPOSE - what area of life is this for?
 3. Find the best matching existing folder, or create a new one
 4. Generate a descriptive filename if the original is generic
 
 CRITICAL REMINDERS:
 - Insurance documents (policies, claims, coverage) → Insurance/
-- Financial documents (tax, bank, invoices) → Financial/
+- Financial documents (tax, bank, invoices, paystubs) → Financial/
 - Health_Fitness is ONLY for actual workout/exercise content
 - Prefer existing folders and subcategories when they match
 

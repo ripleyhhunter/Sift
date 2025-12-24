@@ -139,6 +139,15 @@ class DocumentClassifier:
                 'reasoning': 'Classified by filename keywords (LLM fallback)',
                 'suggested_filename': file_path.stem
             })
+        elif any(kw in filename for kw in ['paystub', 'pay_stub', 'paycheck', 'pay-stub', 'payslip', 'earnings']):
+            return ClassificationResult.from_dict({
+                'document_type': 'Paystub',
+                'primary_category': 'Financial',
+                'subcategory': 'Payroll',
+                'confidence': 0.80,
+                'reasoning': 'Classified by filename keywords (LLM fallback)',
+                'suggested_filename': file_path.stem
+            })
         elif any(kw in filename for kw in ['contract', 'agreement', 'legal']):
             return ClassificationResult.from_dict({
                 'document_type': 'Legal Document',
