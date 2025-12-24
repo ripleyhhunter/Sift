@@ -7,9 +7,12 @@ Supports both text-based (fast) and vision-based (for images) classification.
 
 import json
 import logging
+import os
 import re
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any
+from datetime import datetime
+from pathlib import Path
+from typing import List, Optional, Dict, Any, Tuple
 import requests
 
 from .config import Config
@@ -18,144 +21,239 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================================
-# PROMPT TEMPLATES - Different prompts for different model sizes
+# UNIFIED PROMPT SYSTEM
+# ============================================================================
+# 
+# The prompt system is designed around a clear workflow:
+# 1. DOCUMENT METADATA - File information (name, type, size, date)
+# 2. FOLDER STRUCTURE - Complete hierarchy of existing folders
+# 3. DOCUMENT CONTENT - Extracted text from the document
+# 4. CLASSIFICATION TASK - Clear instructions for the LLM
+#
+# Model size adaptations only affect verbosity, not the structure.
 # ============================================================================
 
-# SIMPLE prompt for small models (< 2B parameters)
-# Focus on CONTEXTUAL REASONING - what is this document FOR?
-PROMPT_SIMPLE = """You classify documents by understanding what they're FOR.
+# Base system prompt - used for all model sizes
+# Defines the role, workflow, and output format
+SYSTEM_PROMPT_BASE = """You are Sift, an intelligent document classification assistant. Your task is to analyze documents and classify them into the appropriate folder within the user's organized file system.
 
-THINK ABOUT THE DOCUMENT'S PURPOSE:
-1. What ACTIVITY or AREA OF LIFE is this for?
-2. Look at KEYWORDS in content and filename!
+## YOUR WORKFLOW
 
-MATCH CONTENT TO CATEGORY:
-- Insurance policy, coverage, premium, claim, indemnity → Insurance
-- Tax, W2, 1099, bank statement, invoice → Financial
-- Lease, contract, agreement, legal → Legal
-- Running, workout, exercise, race, marathon, gym → Health_Fitness
-- Wedding, bride, groom, first dance, reception → Personal/Wedding
-- Electronics, circuits, ESP32, Arduino → Hobbies/Electronics
-- Resume, CV, job application → Work/Resumes
-- Medical, doctor, prescription, diagnosis → Medical
-- Passport, license, permit, government → Government
-- Receipt, purchase confirmation → Receipts
-- Travel, flight, hotel, itinerary → Travel
+1. **READ** the document metadata (filename, type, size)
+2. **EXAMINE** the existing folder structure to understand what categories exist
+3. **ANALYZE** the document content to understand what it is
+4. **CLASSIFY** into the most appropriate existing folder, or suggest a new one
+5. **RESPOND** with a structured JSON classification
 
-KEY DISTINCTION:
-- Insurance documents (policy, coverage, premium) → Insurance (NOT Health_Fitness!)
-- Sports/fitness events (races, marathons) → Health_Fitness
-- Life events (weddings, babies) → Personal
-- Don't confuse them!
+## CLASSIFICATION PRINCIPLES
 
-REQUIRED JSON:
+**ALWAYS prefer existing folders** - The user has already organized their files. Use their existing folder structure when a document fits.
+
+**Create new folders sparingly** - Only create new categories/subcategories when no existing folder is appropriate.
+
+**Match by PURPOSE, not keywords** - Classify based on what the document is FOR, not just words it contains:
+- An "insurance policy" goes to Insurance/, not Health_Fitness/
+- A "training plan for marathon" goes to Health_Fitness/, not Work/
+- A "wedding vendor contract" goes to Personal/Wedding/, not Legal/
+
+## CATEGORY GUIDELINES
+
+| Category | Use For | NOT For |
+|----------|---------|---------|
+| Insurance | Policies, claims, coverage docs | Health insurance claims (→ Medical) |
+| Financial | Tax, banking, invoices, bills | Insurance policies (→ Insurance) |
+| Medical | Doctor visits, prescriptions, health records | Gym memberships (→ Health_Fitness) |
+| Legal | Contracts, agreements, legal letters | Lease agreements may go to Home/ |
+| Work | Employment docs, HR, resumes, projects | Personal projects (→ Hobbies) |
+| Health_Fitness | Workout plans, gym, race registrations | Body measurements for clothing (→ Personal) |
+| Personal | Identity docs, personal records, lifestyle | Work-related personal info (→ Work) |
+| Home | Household, kitchen, maintenance | Recipes (→ Hobbies/Cooking) |
+| Hobbies | Crafts, collections, recreational | Electronics for work (→ Work) |
+
+## REQUIRED OUTPUT FORMAT
+
+You MUST respond with valid JSON only. No additional text before or after.
+
+```json
 {
-  "category": "main folder",
-  "subcategory": "DESCRIPTIVE name",
-  "confidence": 0.0 to 1.0,
-  "document_type": "what this document IS",
-  "summary": "what it contains",
-  "reasoning": "what ACTIVITY/AREA is this for?"
-}"""
+  "category": "TopLevelFolder",
+  "subcategory": "SubfolderName",
+  "confidence": 0.85,
+  "document_type": "Specific Document Type",
+  "summary": "Brief description of document contents",
+  "reasoning": "Why this classification is appropriate",
+  "suggested_filename": "Descriptive_Filename",
+  "extracted_date": "2024-01-15 or null",
+  "extracted_org": "Organization name or null"
+}
+```
 
-# MODERATE prompt for medium models (2-4B parameters)
-# Focus on CONTEXTUAL REASONING - what is this document FOR?
-PROMPT_MODERATE = """You classify documents by understanding their PURPOSE.
+**Field Requirements:**
+- `category`: MUST be a top-level folder (existing or new)
+- `subcategory`: Subfolder within category (can be empty string if none needed)
+- `confidence`: 0.0 to 1.0 (use 0.9+ for obvious matches, 0.7-0.8 for good matches, below 0.7 if uncertain)
+- `document_type`: Specific type like "Insurance Policy", "Tax Return", "Resume"
+- `summary`: 1-2 sentence description of what the document contains
+- `reasoning`: Brief explanation of why you chose this classification
+- `suggested_filename`: Descriptive name without extension (use underscores, no special chars)
+- `extracted_date`: Any date found in document (YYYY-MM-DD format) or null
+- `extracted_org`: Any organization/company name found or null"""
 
-MATCH CONTENT TO CATEGORY:
-- Insurance policy, coverage, premium, claim, indemnity, liability → Insurance
-- Tax, W2, 1099, bank statement, invoice, payment → Financial
-- Lease, rental, contract, legal agreement → Legal
-- Medical, doctor, hospital, prescription, diagnosis → Medical
-- Running, training plan, workout, exercise, race, marathon, gym → Health_Fitness
-- Wedding, bride, groom, first dance, reception, ceremony → Personal/Wedding
-- Electronics, circuits, datasheets, Arduino, ESP32 → Hobbies
-- Resume, CV, job application → Work/Resumes
-- Kitchen inventory, home items → Home
-- Passport, license, permit, government → Government
+# Compact version for smaller models - same structure, less verbose
+SYSTEM_PROMPT_COMPACT = """You are Sift, a document classifier. Analyze documents and classify them into folders.
 
-CRITICAL DISTINCTIONS:
-- Insurance documents (policy, premium, coverage) → Insurance (NOT Health_Fitness!)
-- A "training plan" for a RACE/RUN → Health_Fitness (NOT wedding!)
-- A "training program" for a JOB → Work
-- Sports events (5K, marathon, race) → Health_Fitness
-- Life events (wedding, baby shower) → Personal
+## WORKFLOW
+1. Read document metadata and content
+2. Check existing folder structure
+3. Classify into best matching folder (prefer existing folders)
+4. Respond with JSON only
 
-EXISTING FOLDERS = USER CONTEXT:
-- If Hobbies/Electronics exists → electronics docs go there
-- Check existing folders first!
-
-JSON FORMAT:
-{
-  "content_summary": "what this document contains",
-  "document_type": "what this document IS",
-  "primary_category": "category",
-  "subcategory": "descriptive name",
-  "confidence": 0.0-1.0,
-  "reasoning": "what ACTIVITY is this for?"
-}"""
-
-# DETAILED prompt for larger models (4B+ parameters)
-# Full instructions with examples and edge cases
-PROMPT_DETAILED = """You are a document classification assistant. Your job is to READ and UNDERSTAND document content, then classify it appropriately.
-
-MANDATORY FIRST STEP - CONTENT SUMMARY:
-Before classifying, you MUST first write a brief summary of what the document actually contains. This forces you to read it carefully. Ask yourself: "What is this document about? What kind of information does it contain?"
-
-COMMON MISTAKES TO AVOID:
-- A "Personal Profile" with height/weight/clothing sizes is about FASHION or LIFESTYLE, NOT fitness
-- A "Kitchen Inventory" or food list is about HOME/COOKING, NOT exercise
-- A "Wardrobe" or clothing list is about FASHION/LIFESTYLE, NOT fitness  
-- Body measurements for clothing purposes are NOT medical or fitness documents
-- Lists of possessions (clothes, food, items) are INVENTORY documents, not fitness
-
-AVAILABLE CATEGORIES (use these or create new ones):
-- Financial: taxes, banking, investments, bills, invoices, receipts
-- Medical: doctor visits, prescriptions, health insurance claims, medical records
-- Legal: contracts, agreements, legal correspondence
-- Government: IDs, licenses, permits
+## CATEGORY GUIDE
 - Insurance: policies, claims, coverage
-- Work: EMPLOYMENT-related only - job documents, professional projects, HR, resumes
-- Education: academic transcripts, degrees, courses
-- Personal: identity documents, personal records, fashion/style profiles, lifestyle documents
-- Home: household inventory, kitchen/cooking, home maintenance, furniture, appliances
-- Health_Fitness: ACTUAL exercise programs, gym memberships, workout plans, race registrations
-- Hobbies: recreational activities, crafts, collections, cooking recipes
-- Travel: trips, itineraries, bookings
-- Receipts: purchase confirmations
+- Financial: tax, banking, invoices
+- Medical: doctor, prescriptions, health records
+- Legal: contracts, agreements
+- Work: employment, HR, resumes
+- Health_Fitness: workouts, gym, races (NOT insurance!)
+- Personal: identity docs, lifestyle
+- Home: household, kitchen, maintenance
+- Hobbies: crafts, collections, recipes
 
-CLASSIFICATION RULES:
-1. Health_Fitness is ONLY for actual exercise/workout content (gym routines, running plans, etc.)
-2. Personal measurements (height, weight) for CLOTHING purposes → Personal/Fashion or Lifestyle
-3. Food/kitchen lists → Home/Kitchen or Hobbies/Cooking
-4. Clothing/wardrobe lists → Personal/Fashion or Lifestyle/Wardrobe
-5. If unsure, choose Personal or Home over Health_Fitness
-6. Create new categories/subcategories when needed (Fashion, Lifestyle, Kitchen, Wardrobe, etc.)
-
-JSON FORMAT - ALL FIELDS REQUIRED:
+## OUTPUT (JSON only, no other text)
 {
-  "content_summary": "2-3 sentence description of what this document ACTUALLY contains",
-  "document_type": "specific type (e.g., 'Wardrobe Inventory', 'Kitchen Inventory', 'Personal Style Profile')",
-  "primary_category": "category name",
-  "subcategory": "subcategory name (create new one if needed)",
-  "confidence": 0.0 to 1.0,
-  "reasoning": "explain WHY this category based on the content summary above",
-  "suggested_filename": "descriptive name without extension",
-  "extracted_info": {
-    "date": "date if found",
-    "organization": "organization if found"
-  }
+  "category": "FolderName",
+  "subcategory": "SubfolderName",
+  "confidence": 0.85,
+  "document_type": "Type",
+  "summary": "Brief description",
+  "reasoning": "Why this folder",
+  "suggested_filename": "Name",
+  "extracted_date": "YYYY-MM-DD or null",
+  "extracted_org": "Org name or null"
 }"""
 
-# Map prompt styles to templates
-PROMPT_TEMPLATES = {
-    "simple": PROMPT_SIMPLE,
-    "moderate": PROMPT_MODERATE,
-    "detailed": PROMPT_DETAILED
+# Map prompt styles to system prompts
+SYSTEM_PROMPTS = {
+    "simple": SYSTEM_PROMPT_COMPACT,
+    "moderate": SYSTEM_PROMPT_BASE,
+    "detailed": SYSTEM_PROMPT_BASE
 }
 
-# Legacy alias
-SYSTEM_PROMPT_TEXT = PROMPT_DETAILED
+# Legacy aliases for backwards compatibility
+PROMPT_TEMPLATES = SYSTEM_PROMPTS
+PROMPT_SIMPLE = SYSTEM_PROMPT_COMPACT
+PROMPT_MODERATE = SYSTEM_PROMPT_BASE
+PROMPT_DETAILED = SYSTEM_PROMPT_BASE
+SYSTEM_PROMPT_TEXT = SYSTEM_PROMPT_BASE
+
+
+# ============================================================================
+# DOCUMENT METADATA HELPERS
+# ============================================================================
+
+@dataclass
+class DocumentMetadata:
+    """Structured metadata about a document."""
+    filename: str
+    extension: str
+    file_type: str  # Human-readable type
+    size_bytes: int
+    size_human: str  # Human-readable size
+    modified_date: str
+    page_count: Optional[int] = None
+    
+    @classmethod
+    def from_path(cls, file_path: Path) -> 'DocumentMetadata':
+        """Extract metadata from a file path."""
+        stat = file_path.stat()
+        size = stat.st_size
+        
+        # Human-readable size
+        if size < 1024:
+            size_human = f"{size} bytes"
+        elif size < 1024 * 1024:
+            size_human = f"{size / 1024:.1f} KB"
+        else:
+            size_human = f"{size / (1024 * 1024):.1f} MB"
+        
+        # File type mapping
+        ext = file_path.suffix.lower()
+        type_map = {
+            '.pdf': 'PDF Document',
+            '.docx': 'Word Document',
+            '.doc': 'Word Document (Legacy)',
+            '.xlsx': 'Excel Spreadsheet',
+            '.xls': 'Excel Spreadsheet (Legacy)',
+            '.pptx': 'PowerPoint Presentation',
+            '.ppt': 'PowerPoint Presentation (Legacy)',
+            '.csv': 'CSV Data File',
+            '.tsv': 'TSV Data File',
+            '.txt': 'Text File',
+            '.png': 'PNG Image',
+            '.jpg': 'JPEG Image',
+            '.jpeg': 'JPEG Image',
+            '.gif': 'GIF Image',
+            '.bmp': 'Bitmap Image',
+            '.tiff': 'TIFF Image',
+        }
+        
+        return cls(
+            filename=file_path.name,
+            extension=ext,
+            file_type=type_map.get(ext, f'{ext.upper()} File'),
+            size_bytes=size,
+            size_human=size_human,
+            modified_date=datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M'),
+            page_count=None  # Can be set later for PDFs
+        )
+    
+    def to_prompt_block(self) -> str:
+        """Format metadata as a prompt block."""
+        lines = [
+            "## DOCUMENT METADATA",
+            f"- Filename: {self.filename}",
+            f"- Type: {self.file_type}",
+            f"- Size: {self.size_human}",
+            f"- Modified: {self.modified_date}",
+        ]
+        if self.page_count:
+            lines.append(f"- Pages: {self.page_count}")
+        return "\n".join(lines)
+
+
+def format_folder_structure(structure: Dict[str, List[str]], indent: str = "  ") -> str:
+    """
+    Format folder structure as a hierarchical tree for the prompt.
+    
+    Args:
+        structure: Dict mapping category names to list of subcategories
+        indent: Indentation string for subcategories
+        
+    Returns:
+        Formatted string showing the folder tree
+    """
+    if not structure:
+        return "No folders exist yet. You may create new categories as needed."
+    
+    lines = ["## EXISTING FOLDER STRUCTURE", "```"]
+    lines.append("Sift/")
+    
+    for category in sorted(structure.keys()):
+        subcats = structure[category]
+        if subcats:
+            lines.append(f"├── {category}/")
+            for i, subcat in enumerate(sorted(subcats)):
+                if i == len(subcats) - 1:
+                    lines.append(f"│   └── {subcat}/")
+                else:
+                    lines.append(f"│   ├── {subcat}/")
+        else:
+            lines.append(f"├── {category}/")
+    
+    lines.append("└── [New folders can be created as needed]")
+    lines.append("```")
+    
+    return "\n".join(lines)
 
 
 
@@ -236,8 +334,8 @@ class LMStudioClient:
         self.temperature = self.profile.temperature
         self.prompt_style = self.profile.prompt_style
         
-        # Get the appropriate prompt template
-        self.system_prompt = PROMPT_TEMPLATES.get(self.prompt_style, PROMPT_MODERATE)
+        # Get the appropriate system prompt for this model size
+        self.system_prompt = SYSTEM_PROMPTS.get(self.prompt_style, SYSTEM_PROMPT_BASE)
         
         logger.info(f"LLM Profile: {self.profile.name}")
         logger.info(f"  Model: {self.model_identifier}")
@@ -274,7 +372,7 @@ class LMStudioClient:
         self.max_tokens = new_profile.max_tokens
         self.temperature = new_profile.temperature
         self.prompt_style = new_profile.prompt_style
-        self.system_prompt = PROMPT_TEMPLATES.get(self.prompt_style, PROMPT_MODERATE)
+        self.system_prompt = SYSTEM_PROMPTS.get(self.prompt_style, SYSTEM_PROMPT_BASE)
         
         # Update config's active profile
         self.config.llm.active_profile = profile_name
@@ -372,129 +470,115 @@ class LMStudioClient:
     
     def _build_user_prompt(
         self,
-        sampled_text: str,
-        filename: str,
-        existing_folders: List[str],
-        category_structure: Optional[Dict[str, List[str]]] = None
+        content: str,
+        metadata: Optional[DocumentMetadata] = None,
+        category_structure: Optional[Dict[str, List[str]]] = None,
+        filename: str = "",
+        existing_folders: Optional[List[str]] = None
     ) -> str:
         """
-        Build the user prompt based on the prompt style.
+        Build a structured user prompt with document data.
         
-        Different prompts for different model sizes:
-        - simple: Minimal instructions for small models
-        - moderate: Balanced for medium models
-        - detailed: Full instructions for large models
+        The prompt has three clear sections:
+        1. DOCUMENT METADATA - File information
+        2. FOLDER STRUCTURE - Existing organization
+        3. DOCUMENT CONTENT - Extracted text
         
-        ALL styles now receive the full folder structure so the LLM can
-        see existing folders and subfolders, and create new ones if needed.
+        Args:
+            content: Extracted/sampled document content
+            metadata: Structured document metadata (optional)
+            category_structure: Dict mapping categories to subcategories
+            filename: Fallback filename if no metadata provided
+            existing_folders: Fallback folder list if no structure provided
+            
+        Returns:
+            Formatted user prompt
         """
-        # Build category list - ALWAYS include full structure with subfolders
+        sections = []
+        
+        # === SECTION 1: DOCUMENT METADATA ===
+        if metadata:
+            sections.append(metadata.to_prompt_block())
+        elif filename:
+            # Fallback: minimal metadata from filename
+            sections.append(f"## DOCUMENT METADATA\n- Filename: {filename}")
+        
+        # === SECTION 2: FOLDER STRUCTURE ===
         if category_structure:
-            category_lines = []
-            for cat, subcats in sorted(category_structure.items()):
-                if subcats:
-                    subcat_str = ", ".join(sorted(subcats))  # Show ALL subcategories
-                    category_lines.append(f"- {cat}/: [{subcat_str}]")
-                else:
-                    category_lines.append(f"- {cat}/")
-            category_info = "\n".join(category_lines) if category_lines else "No folders yet - create as needed"
+            sections.append(format_folder_structure(category_structure))
         elif existing_folders:
-            category_info = "\n".join(f"- {f}/" for f in sorted(existing_folders))
+            # Fallback: simple list format
+            folder_list = "\n".join(f"- {f}/" for f in sorted(existing_folders))
+            sections.append(f"## EXISTING FOLDERS\n{folder_list}")
         else:
-            category_info = "No folders yet - create as needed (e.g., Financial, Insurance, Medical, Legal, Work, Personal)"
+            sections.append("## EXISTING FOLDERS\nNo folders exist yet. Create categories as needed.")
         
+        # === SECTION 3: DOCUMENT CONTENT ===
+        sections.append(f"## DOCUMENT CONTENT\n```\n{content}\n```")
+        
+        # === SECTION 4: TASK (varies by model size) ===
         if self.prompt_style == "simple":
-            # Simple prompt with full folder structure visibility
-            return f"""Classify this document into a folder.
-
-FILENAME: {filename}
-
-YOUR EXISTING FOLDER STRUCTURE:
-{category_info}
-
-CONTENT:
-{sampled_text}
-
-INSTRUCTIONS:
-1. USE an existing folder/subfolder if it matches
-2. Or CREATE a new folder if nothing fits
-3. For insurance documents → Insurance/ folder
-4. For tax/bank/financial → Financial/
-5. For medical/health records → Medical/
-6. For fitness/exercise → Health_Fitness/
-
-Respond with JSON: {{"category": "folder", "subcategory": "subfolder", "confidence": 0.9, "document_type": "type", "summary": "brief", "reasoning": "why"}} /no_think"""
-        
-        elif self.prompt_style == "moderate":
-            # Moderate prompt with clear folder structure
-            return f"""Classify this document into an appropriate folder.
-
-FILENAME: {filename}
-
-YOUR EXISTING FOLDER STRUCTURE:
-{category_info}
-
-CONTENT:
----
-{sampled_text}
----
-
-RULES:
-1. PREFER existing folders/subfolders when they match
-2. CREATE new folders only if nothing fits
-3. Insurance/policy/coverage → Insurance/ (NOT Health_Fitness!)
-4. Tax/bank/financial → Financial/
-5. Medical/doctor/prescription → Medical/
-6. Running/workout/exercise → Health_Fitness/
-7. Wedding/personal events → Personal/
-
-Reply with JSON only. /no_think"""
-        
-        else:  # detailed
-            # Full prompt for large models (4B+)
-            return f"""READ the document content below and classify it into an appropriate folder.
-
-STEP 1: First, write a "content_summary" describing what this document actually contains.
-STEP 2: Then classify based on that summary using an EXISTING folder or creating a NEW one.
-
-YOUR EXISTING FOLDER STRUCTURE:
-{category_info}
-
-RULES:
-1. PREFER existing folders/subfolders when they match the document content
-2. CREATE new folders/subfolders only if no existing folder fits
-3. Insurance documents (policy, coverage, premium) → Insurance/ folder
-4. Financial documents (tax, bank, invoice) → Financial/ folder
-5. Medical documents (doctor, prescription) → Medical/ folder
-6. Clothing/wardrobe/fashion → Personal/Fashion or create new subfolder
-7. Kitchen/food inventory → Home/Kitchen
-8. Health_Fitness is ONLY for actual workout/exercise content (NOT insurance!)
-
-Filename (for reference): {filename}
-
-DOCUMENT CONTENT - READ THIS CAREFULLY:
----
-{sampled_text}
----
-
-What does this document contain? Write content_summary first, then classify.
+            # Compact task for small models
+            task = """## TASK
+Classify this document. Use an existing folder if it matches, or create a new one.
 Respond with JSON only. /no_think"""
+        elif self.prompt_style == "moderate":
+            # Medium verbosity
+            task = """## TASK
+Analyze the document and classify it into the most appropriate folder.
+
+REMEMBER:
+- Insurance policies → Insurance/ (not Health_Fitness!)
+- Prefer existing folders when they match
+- Create new folders only when necessary
+
+Respond with JSON only. /no_think"""
+        else:
+            # Detailed task for larger models
+            task = """## TASK
+Carefully read the document content above and classify it appropriately.
+
+STEPS:
+1. Identify what type of document this is (invoice, policy, contract, etc.)
+2. Determine its PURPOSE - what area of life is this for?
+3. Find the best matching existing folder, or create a new one
+4. Generate a descriptive filename if the original is generic
+
+CRITICAL REMINDERS:
+- Insurance documents (policies, claims, coverage) → Insurance/
+- Financial documents (tax, bank, invoices) → Financial/
+- Health_Fitness is ONLY for actual workout/exercise content
+- Prefer existing folders and subcategories when they match
+
+Respond with valid JSON only. No other text. /no_think"""
+        
+        sections.append(task)
+        
+        return "\n\n".join(sections)
     
     def classify_document_text(
         self,
         text: str,
         filename: str,
         existing_folders: List[str],
-        category_structure: Optional[Dict[str, List[str]]] = None
+        category_structure: Optional[Dict[str, List[str]]] = None,
+        file_path: Optional[Path] = None
     ) -> ClassificationResult:
         """
-        Classify a document based on its text content (fast mode).
+        Classify a document based on its text content.
+        
+        This is the main classification method. It:
+        1. Extracts metadata from the file (if path provided)
+        2. Samples the document content appropriately for the model size
+        3. Builds a structured prompt with metadata, folder structure, and content
+        4. Sends to the LLM and parses the response
         
         Args:
             text: Extracted text from the document
             filename: Original filename for context
             existing_folders: List of existing category folder names
             category_structure: Dict mapping category names to their subcategories
+            file_path: Optional path to file for metadata extraction
             
         Returns:
             Classification result
@@ -503,17 +587,31 @@ Respond with JSON only. /no_think"""
             return ClassificationResult.create_fallback("No text provided")
         
         try:
-            # Adjust text sample size based on prompt style
+            # === STEP 1: Extract document metadata ===
+            metadata = None
+            if file_path and file_path.exists():
+                try:
+                    metadata = DocumentMetadata.from_path(file_path)
+                    logger.debug(f"Extracted metadata: {metadata.file_type}, {metadata.size_human}")
+                except Exception as e:
+                    logger.debug(f"Could not extract metadata: {e}")
+            
+            # === STEP 2: Sample content based on model size ===
             # Smaller models work better with less text
-            sample_sizes = {"simple": 1000, "moderate": 1500, "detailed": 2000}
+            sample_sizes = {"simple": 1200, "moderate": 1800, "detailed": 2500}
             max_chars = sample_sizes.get(self.prompt_style, 1500)
             sampled_text = self._sample_text(text, max_chars=max_chars)
             
-            # Build the user prompt based on prompt style
+            # === STEP 3: Build structured prompt ===
             user_prompt = self._build_user_prompt(
-                sampled_text, filename, existing_folders, category_structure
+                content=sampled_text,
+                metadata=metadata,
+                category_structure=category_structure,
+                filename=filename,
+                existing_folders=existing_folders
             )
 
+            # === STEP 4: Prepare messages with system prompt ===
             messages = [
                 {"role": "system", "content": self.system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -600,6 +698,15 @@ Respond with JSON only. /no_think"""
                 data['primary_category'] = data['category']
             if 'summary' in data and 'content_summary' not in data:
                 data['content_summary'] = data['summary']
+            
+            # Handle extracted info fields (new unified format)
+            if 'extracted_date' in data or 'extracted_org' in data:
+                if 'extracted_info' not in data:
+                    data['extracted_info'] = {}
+                if 'extracted_date' in data and data['extracted_date']:
+                    data['extracted_info']['date'] = data['extracted_date']
+                if 'extracted_org' in data and data['extracted_org']:
+                    data['extracted_info']['organization'] = data['extracted_org']
             
             # Validate and fill defaults
             if 'primary_category' not in data:

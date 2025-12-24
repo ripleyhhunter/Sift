@@ -82,16 +82,18 @@ class DocumentClassifier:
         text: str,
         existing_folders: List[str]
     ) -> ClassificationResult:
-        """Classify using extracted text (fast)."""
+        """Classify using extracted text with full metadata and folder structure."""
         try:
             # Get full category structure with subcategories
             category_structure = self.get_category_structure()
             
+            # Pass file_path for metadata extraction
             result = self.llm_client.classify_document_text(
                 text=text,
                 filename=file_path.name,
                 existing_folders=existing_folders,
-                category_structure=category_structure
+                category_structure=category_structure,
+                file_path=file_path  # For metadata extraction
             )
             
             # If LLM returned a fallback (timeout, error), try filename-based classification
