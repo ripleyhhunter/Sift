@@ -2,7 +2,7 @@
 
 An intelligent cross-platform document organization system that automatically monitors your inbox folder, analyzes documents using a local LLM (via LMStudio), and sifts them into appropriate subfolders based on content classification.
 
-[![Build Sift](https://github.com/ripleyhhunter/SmartFolder/actions/workflows/build.yml/badge.svg)](https://github.com/ripleyhhunter/SmartFolder/actions/workflows/build.yml)
+[![Build Sift](https://github.com/ripleyhhunter/Sift/actions/workflows/build.yml/badge.svg)](https://github.com/ripleyhhunter/Sift/actions/workflows/build.yml)
 
 ## Features
 
@@ -22,9 +22,9 @@ An intelligent cross-platform document organization system that automatically mo
 
 The easiest way to get started is to download a pre-built release:
 
-**[📥 Download Latest Release](https://github.com/ripleyhhunter/SmartFolder/releases)**
+**[📥 Download Latest Release](https://github.com/ripleyhhunter/Sift/releases)**
 
-Or grab build artifacts from [GitHub Actions](https://github.com/ripleyhhunter/SmartFolder/actions).
+Or grab build artifacts from [GitHub Actions](https://github.com/ripleyhhunter/Sift/actions).
 
 | Platform | Download |
 |----------|----------|
@@ -60,7 +60,7 @@ Or grab build artifacts from [GitHub Actions](https://github.com/ripleyhhunter/S
 
 ```cmd
 # Clone the repository
-git clone https://github.com/ripleyhhunter/SmartFolder.git
+git clone https://github.com/ripleyhhunter/Sift.git
 cd SmartFolder
 
 # Run the installer
@@ -74,7 +74,7 @@ run.bat
 
 ```bash
 # Clone the repository
-git clone https://github.com/ripleyhhunter/SmartFolder.git
+git clone https://github.com/ripleyhhunter/Sift.git
 cd SmartFolder
 
 # Run the setup script (installs all dependencies)
