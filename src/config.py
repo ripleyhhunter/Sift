@@ -154,6 +154,7 @@ class ProcessingConfig:
     image_dpi: int = 150
     max_image_dimension: int = 1024
     processing_delay_seconds: float = 2.0
+    ocr_enabled: bool = True  # Enable OCR for scanned PDFs (requires Tesseract)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'ProcessingConfig':
@@ -167,7 +168,8 @@ class ProcessingConfig:
             max_pages_to_analyze=data.get('max_pages_to_analyze', 3),
             image_dpi=data.get('image_dpi', 150),
             max_image_dimension=data.get('max_image_dimension', 1024),
-            processing_delay_seconds=data.get('processing_delay_seconds', 2.0)
+            processing_delay_seconds=data.get('processing_delay_seconds', 2.0),
+            ocr_enabled=data.get('ocr_enabled', True)
         )
 
 
@@ -258,6 +260,7 @@ class AdvancedConfig:
     retry_delay_seconds: float = 5.0
     concurrent_processing: bool = False
     startup_scan: bool = True
+    custom_rules: List[Dict[str, Any]] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'AdvancedConfig':
@@ -266,7 +269,8 @@ class AdvancedConfig:
             retry_attempts=data.get('retry_attempts', 3),
             retry_delay_seconds=data.get('retry_delay_seconds', 5.0),
             concurrent_processing=data.get('concurrent_processing', False),
-            startup_scan=data.get('startup_scan', True)
+            startup_scan=data.get('startup_scan', True),
+            custom_rules=data.get('custom_rules', [])
         )
 
 

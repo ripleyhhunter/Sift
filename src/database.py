@@ -111,8 +111,11 @@ class DocumentDatabase:
             for column in ['content_snippet TEXT', 'content_summary TEXT']:
                 try:
                     cursor.execute(f'ALTER TABLE documents ADD COLUMN {column}')
-                except:
-                    pass  # Column already exists
+                    logger.debug(f"Added column: {column}")
+                except sqlite3.OperationalError as e:
+                    # Column already exists - this is expected during upgrades
+                    if 'duplicate column name' not in str(e).lower():
+                        logger.warning(f"Unexpected error adding column {column}: {e}")
             
             # Activity log table
             cursor.execute('''
@@ -126,6 +129,51 @@ class DocumentDatabase:
                     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (document_id) REFERENCES documents(id)
                 )
+            ''')
+            
+            # Processing queue table for crash recovery
+            # Tracks files that are in-flight (being processed) so they can be
+            # recovered if the application crashes mid-processing
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS processing_queue (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    file_path TEXT NOT NULL UNIQUE,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    retry_count INTEGER DEFAULT 0,
+                    error_message TEXT,
+                    queued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    started_at TIMESTAMP,
+                    completed_at TIMESTAMP
+                )
+            ''')
+            
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_processing_queue_status 
+                ON processing_queue(status)
+            ''')
+            
+            # Corrections table for learning from user feedback
+            # When users manually reassign documents, we store the correction
+            # to improve future classifications
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS classification_corrections (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    document_id INTEGER,
+                    original_category TEXT NOT NULL,
+                    original_subcategory TEXT,
+                    corrected_category TEXT NOT NULL,
+                    corrected_subcategory TEXT,
+                    document_type TEXT,
+                    content_snippet TEXT,
+                    filename_pattern TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (document_id) REFERENCES documents(id)
+                )
+            ''')
+            
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_corrections_category 
+                ON classification_corrections(corrected_category)
             ''')
             
             # Create indexes for common queries
@@ -142,8 +190,59 @@ class DocumentDatabase:
                 ON documents(category)
             ''')
             
+            # Create FTS5 virtual table for full-text search
+            # This enables fast text searching across document content
+            cursor.execute('''
+                CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
+                    original_filename,
+                    document_type,
+                    content_snippet,
+                    content_summary,
+                    category,
+                    subcategory,
+                    content='documents',
+                    content_rowid='id',
+                    tokenize='porter unicode61'
+                )
+            ''')
+            
+            # Create triggers to keep FTS index in sync with documents table
+            cursor.execute('''
+                CREATE TRIGGER IF NOT EXISTS documents_ai AFTER INSERT ON documents BEGIN
+                    INSERT INTO documents_fts(rowid, original_filename, document_type, 
+                        content_snippet, content_summary, category, subcategory)
+                    VALUES (new.id, new.original_filename, new.document_type,
+                        new.content_snippet, new.content_summary, new.category, new.subcategory);
+                END
+            ''')
+            
+            cursor.execute('''
+                CREATE TRIGGER IF NOT EXISTS documents_ad AFTER DELETE ON documents BEGIN
+                    INSERT INTO documents_fts(documents_fts, rowid, original_filename, 
+                        document_type, content_snippet, content_summary, category, subcategory)
+                    VALUES ('delete', old.id, old.original_filename, old.document_type,
+                        old.content_snippet, old.content_summary, old.category, old.subcategory);
+                END
+            ''')
+            
+            cursor.execute('''
+                CREATE TRIGGER IF NOT EXISTS documents_au AFTER UPDATE ON documents BEGIN
+                    INSERT INTO documents_fts(documents_fts, rowid, original_filename,
+                        document_type, content_snippet, content_summary, category, subcategory)
+                    VALUES ('delete', old.id, old.original_filename, old.document_type,
+                        old.content_snippet, old.content_summary, old.category, old.subcategory);
+                    INSERT INTO documents_fts(rowid, original_filename, document_type,
+                        content_snippet, content_summary, category, subcategory)
+                    VALUES (new.id, new.original_filename, new.document_type,
+                        new.content_snippet, new.content_summary, new.category, new.subcategory);
+                END
+            ''')
+            
             conn.commit()
             logger.debug(f"Database initialized at {self.db_path}")
+            
+            # Rebuild FTS index if it's empty but documents exist
+            self._rebuild_fts_if_needed(conn)
     
     @contextmanager
     def _get_connection(self):
@@ -153,6 +252,71 @@ class DocumentDatabase:
             yield conn
         finally:
             conn.close()
+    
+    def _rebuild_fts_if_needed(self, conn: sqlite3.Connection) -> None:
+        """Rebuild FTS index if it's empty but documents exist (migration case)."""
+        try:
+            cursor = conn.cursor()
+            
+            # Check if documents exist but FTS is empty
+            cursor.execute('SELECT COUNT(*) FROM documents')
+            doc_count = cursor.fetchone()[0]
+            
+            cursor.execute('SELECT COUNT(*) FROM documents_fts')
+            fts_count = cursor.fetchone()[0]
+            
+            if doc_count > 0 and fts_count == 0:
+                logger.info(f"Rebuilding FTS index for {doc_count} existing documents...")
+                self._rebuild_fts_index(conn)
+                logger.info("FTS index rebuild complete")
+                
+        except sqlite3.OperationalError as e:
+            logger.debug(f"FTS check skipped (table may not exist yet): {e}")
+    
+    def _rebuild_fts_index(self, conn: Optional[sqlite3.Connection] = None) -> None:
+        """Rebuild the entire FTS index from the documents table."""
+        should_close = conn is None
+        if conn is None:
+            conn = sqlite3.connect(str(self.db_path))
+        
+        try:
+            cursor = conn.cursor()
+            
+            # Delete all existing FTS data
+            cursor.execute("INSERT INTO documents_fts(documents_fts) VALUES('delete-all')")
+            
+            # Repopulate from documents table
+            cursor.execute('''
+                INSERT INTO documents_fts(rowid, original_filename, document_type,
+                    content_snippet, content_summary, category, subcategory)
+                SELECT id, original_filename, document_type, content_snippet,
+                    content_summary, category, subcategory
+                FROM documents
+            ''')
+            
+            conn.commit()
+            
+        finally:
+            if should_close:
+                conn.close()
+    
+    def rebuild_search_index(self) -> int:
+        """
+        Manually rebuild the FTS search index.
+        
+        Call this if search results seem stale or after manual database edits.
+        
+        Returns:
+            Number of documents indexed
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT COUNT(*) FROM documents')
+            count = cursor.fetchone()[0]
+            
+            self._rebuild_fts_index(conn)
+            logger.info(f"Rebuilt FTS index for {count} documents")
+            return count
     
     def add_document(
         self,
@@ -373,7 +537,7 @@ class DocumentDatabase:
             cursor = conn.cursor()
             cursor.execute('''
                 SELECT a.id, a.action, a.document_id, a.old_path, a.new_path,
-                       d.original_filename
+                       d.original_filename, a.timestamp
                 FROM activity_log a
                 LEFT JOIN documents d ON a.document_id = d.id
                 WHERE a.action IN ('processed', 'reassigned')
@@ -388,9 +552,146 @@ class DocumentDatabase:
                     'document_id': row[2],
                     'old_path': row[3],
                     'new_path': row[4],
-                    'filename': row[5]
+                    'filename': row[5],
+                    'timestamp': row[6]
                 }
             return None
+    
+    def get_undoable_actions(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Get recent actions that can be undone.
+        
+        Args:
+            limit: Maximum number of actions to return
+            
+        Returns:
+            List of undoable actions with details
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT a.id, a.action, a.document_id, a.old_path, a.new_path,
+                       d.original_filename, a.timestamp, d.current_path, d.category,
+                       d.subcategory
+                FROM activity_log a
+                LEFT JOIN documents d ON a.document_id = d.id
+                WHERE a.action IN ('processed', 'reassigned')
+                  AND a.old_path IS NOT NULL
+                  AND a.new_path IS NOT NULL
+                ORDER BY a.timestamp DESC
+                LIMIT ?
+            ''', (limit,))
+            
+            actions = []
+            for row in cursor.fetchall():
+                actions.append({
+                    'id': row[0],
+                    'action': row[1],
+                    'document_id': row[2],
+                    'old_path': row[3],
+                    'new_path': row[4],
+                    'filename': row[5],
+                    'timestamp': row[6],
+                    'current_path': row[7],
+                    'category': row[8],
+                    'subcategory': row[9]
+                })
+            return actions
+    
+    def undo_action(self, action_id: int) -> Dict[str, Any]:
+        """
+        Undo a specific action by moving the file back to its original location.
+        
+        Args:
+            action_id: ID of the action to undo
+            
+        Returns:
+            Dict with success status and details
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Get the action details
+            cursor.execute('''
+                SELECT a.id, a.action, a.document_id, a.old_path, a.new_path,
+                       d.original_filename, d.current_path
+                FROM activity_log a
+                LEFT JOIN documents d ON a.document_id = d.id
+                WHERE a.id = ?
+            ''', (action_id,))
+            
+            row = cursor.fetchone()
+            if not row:
+                return {'success': False, 'error': 'Action not found'}
+            
+            action_type = row[1]
+            document_id = row[2]
+            old_path = row[3]
+            new_path = row[4]
+            filename = row[5]
+            current_path = row[6]
+            
+            if not old_path or not new_path:
+                return {'success': False, 'error': 'Cannot undo: missing path information'}
+            
+            # Check if file is still at the expected location
+            from pathlib import Path
+            current_file = Path(current_path) if current_path else Path(new_path)
+            target_path = Path(old_path)
+            
+            if not current_file.exists():
+                return {
+                    'success': False, 
+                    'error': f'File no longer exists at expected location: {current_file}'
+                }
+            
+            # Ensure target directory exists
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Handle filename conflicts at target
+            final_target = target_path
+            if final_target.exists():
+                counter = 1
+                while final_target.exists():
+                    final_target = target_path.parent / f"{target_path.stem}_{counter}{target_path.suffix}"
+                    counter += 1
+            
+            try:
+                import shutil
+                shutil.move(str(current_file), str(final_target))
+                
+                # Update document record
+                if document_id:
+                    # Extract category from old path
+                    old_category = target_path.parent.name
+                    old_subcategory = ''
+                    
+                    cursor.execute('''
+                        UPDATE documents
+                        SET current_path = ?, status = 'undone'
+                        WHERE id = ?
+                    ''', (str(final_target), document_id))
+                
+                # Log the undo action
+                self._log_activity(
+                    conn, 'undone', document_id,
+                    f"Undid action: moved back from {new_path}",
+                    str(current_file), str(final_target)
+                )
+                
+                conn.commit()
+                
+                return {
+                    'success': True,
+                    'filename': filename,
+                    'old_location': str(current_file),
+                    'new_location': str(final_target),
+                    'action_undone': action_type
+                }
+                
+            except Exception as e:
+                logger.error(f"Undo failed: {e}")
+                return {'success': False, 'error': str(e)}
     
     def get_all_categories(self) -> List[str]:
         """Get all unique categories from the database."""
@@ -407,7 +708,10 @@ class DocumentDatabase:
         limit: int = 20
     ) -> List[Dict[str, Any]]:
         """
-        Search documents using multiple strategies.
+        Search documents using FTS5 full-text search with fallback strategies.
+        
+        Uses SQLite FTS5 for fast, indexed text search with ranking.
+        Falls back to LIKE queries if FTS5 is unavailable.
         
         Args:
             query: Original natural language query (for context)
@@ -428,12 +732,12 @@ class DocumentDatabase:
             results = []
             seen_ids = set()
             
-            # Strategy 1: Exact category/subcategory match
+            # Strategy 1: Exact category/subcategory match (high priority)
             if category_hint:
                 cursor.execute('''
                     SELECT id, original_filename, current_path, category, 
                            subcategory, document_type, confidence, content_snippet,
-                           processed_at
+                           processed_at, content_summary
                     FROM documents
                     WHERE LOWER(category) = LOWER(?) 
                        OR LOWER(subcategory) = LOWER(?)
@@ -444,104 +748,98 @@ class DocumentDatabase:
                 for row in cursor.fetchall():
                     if row[0] not in seen_ids:
                         seen_ids.add(row[0])
-                        results.append(self._row_to_search_result(row, 'category_match', 0.9))
-            
-            # Strategy 2: Document type match
-            for term in search_terms:
-                cursor.execute('''
-                    SELECT id, original_filename, current_path, category, 
-                           subcategory, document_type, confidence, content_snippet,
-                           processed_at
-                    FROM documents
-                    WHERE LOWER(document_type) LIKE ?
-                    ORDER BY processed_at DESC
-                    LIMIT ?
-                ''', (f'%{term}%', limit))
-                
-                for row in cursor.fetchall():
-                    if row[0] not in seen_ids:
-                        seen_ids.add(row[0])
-                        results.append(self._row_to_search_result(row, f'type_match:{term}', 0.85))
-            
-            # Strategy 3: Filename match
-            for term in search_terms:
-                cursor.execute('''
-                    SELECT id, original_filename, current_path, category, 
-                           subcategory, document_type, confidence, content_snippet,
-                           processed_at
-                    FROM documents
-                    WHERE LOWER(original_filename) LIKE ?
-                    ORDER BY processed_at DESC
-                    LIMIT ?
-                ''', (f'%{term}%', limit))
-                
-                for row in cursor.fetchall():
-                    if row[0] not in seen_ids:
-                        seen_ids.add(row[0])
-                        results.append(self._row_to_search_result(row, f'filename_match:{term}', 0.8))
-            
-            # Strategy 4: AI Summary match (semantic/conceptual matching)
-            for term in search_terms:
-                cursor.execute('''
-                    SELECT id, original_filename, current_path, category, 
-                           subcategory, document_type, confidence, content_snippet,
-                           processed_at, content_summary
-                    FROM documents
-                    WHERE LOWER(content_summary) LIKE ?
-                    ORDER BY processed_at DESC
-                    LIMIT ?
-                ''', (f'%{term}%', limit))
-                
-                for row in cursor.fetchall():
-                    if row[0] not in seen_ids:
-                        seen_ids.add(row[0])
-                        # Use the summary as the match snippet
-                        result = self._row_to_search_result(row, f'summary_match:{term}', 0.78)
-                        result['match_snippet'] = row[9] if len(row) > 9 and row[9] else ''
+                        result = self._row_to_search_result(row, 'category_match', 0.9)
+                        result['match_snippet'] = row[9] if row[9] else ''
                         results.append(result)
             
-            # Strategy 5: Content snippet match (raw text keyword matching)
-            for term in search_terms:
-                cursor.execute('''
-                    SELECT id, original_filename, current_path, category, 
-                           subcategory, document_type, confidence, content_snippet,
-                           processed_at
-                    FROM documents
-                    WHERE LOWER(content_snippet) LIKE ?
-                    ORDER BY processed_at DESC
-                    LIMIT ?
-                ''', (f'%{term}%', limit))
-                
-                for row in cursor.fetchall():
-                    if row[0] not in seen_ids:
-                        seen_ids.add(row[0])
-                        # Extract snippet around the match
-                        snippet = self._extract_match_snippet(row[7], term) if row[7] else ''
-                        result = self._row_to_search_result(row, f'content_match:{term}', 0.7)
-                        result['match_snippet'] = snippet
-                        results.append(result)
-            
-            # Strategy 6: Subcategory match
-            for term in search_terms:
-                cursor.execute('''
-                    SELECT id, original_filename, current_path, category, 
-                           subcategory, document_type, confidence, content_snippet,
-                           processed_at
-                    FROM documents
-                    WHERE LOWER(subcategory) LIKE ?
-                    ORDER BY processed_at DESC
-                    LIMIT ?
-                ''', (f'%{term}%', limit))
-                
-                for row in cursor.fetchall():
-                    if row[0] not in seen_ids:
-                        seen_ids.add(row[0])
-                        results.append(self._row_to_search_result(row, f'subcategory_match:{term}', 0.75))
+            # Strategy 2: FTS5 full-text search (fast, indexed)
+            if search_terms:
+                try:
+                    # Build FTS5 query - OR together all terms for broad matching
+                    # FTS5 uses special syntax: term1 OR term2 OR term3
+                    fts_query = ' OR '.join(f'"{term}"' for term in search_terms if term)
+                    
+                    if fts_query:
+                        # FTS5 search with BM25 ranking (lower score = better match)
+                        cursor.execute('''
+                            SELECT d.id, d.original_filename, d.current_path, d.category,
+                                   d.subcategory, d.document_type, d.confidence, d.content_snippet,
+                                   d.processed_at, d.content_summary,
+                                   bm25(documents_fts) as rank
+                            FROM documents_fts
+                            JOIN documents d ON d.id = documents_fts.rowid
+                            WHERE documents_fts MATCH ?
+                            ORDER BY rank
+                            LIMIT ?
+                        ''', (fts_query, limit * 2))  # Fetch extra to account for dedup
+                        
+                        for row in cursor.fetchall():
+                            if row[0] not in seen_ids:
+                                seen_ids.add(row[0])
+                                # Convert BM25 rank to relevance (BM25 gives negative scores, more negative = better)
+                                bm25_score = row[10] if row[10] else 0
+                                # Normalize to 0-1 range (assuming typical BM25 range of -20 to 0)
+                                relevance = min(1.0, max(0.5, 1.0 + (bm25_score / 20)))
+                                
+                                result = self._row_to_search_result(row[:10], 'fts_match', relevance)
+                                # Extract snippet around match
+                                content = row[7] or row[9] or ''
+                                if content:
+                                    for term in search_terms:
+                                        snippet = self._extract_match_snippet(content, term)
+                                        if snippet:
+                                            result['match_snippet'] = snippet
+                                            break
+                                results.append(result)
+                                
+                except sqlite3.OperationalError as e:
+                    # FTS5 not available or error - fall back to LIKE queries
+                    logger.debug(f"FTS5 search failed, using fallback: {e}")
+                    results.extend(self._search_documents_fallback(
+                        cursor, search_terms, seen_ids, limit
+                    ))
             
             # Sort by relevance score
             results.sort(key=lambda x: x['relevance'], reverse=True)
             
             return results[:limit]
+    
+    def _search_documents_fallback(
+        self,
+        cursor: sqlite3.Cursor,
+        search_terms: List[str],
+        seen_ids: set,
+        limit: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Fallback search using LIKE queries when FTS5 is unavailable.
+        
+        This is slower but works on older SQLite versions.
+        """
+        results = []
+        
+        # Search document type
+        for term in search_terms[:5]:  # Limit terms to avoid too many queries
+            cursor.execute('''
+                SELECT id, original_filename, current_path, category, 
+                       subcategory, document_type, confidence, content_snippet,
+                       processed_at, content_summary
+                FROM documents
+                WHERE LOWER(document_type) LIKE ? 
+                   OR LOWER(original_filename) LIKE ?
+                   OR LOWER(content_summary) LIKE ?
+                ORDER BY processed_at DESC
+                LIMIT ?
+            ''', (f'%{term}%', f'%{term}%', f'%{term}%', limit))
+            
+            for row in cursor.fetchall():
+                if row[0] not in seen_ids:
+                    seen_ids.add(row[0])
+                    result = self._row_to_search_result(row, f'fallback_match:{term}', 0.7)
+                    result['match_snippet'] = row[9] if row[9] else ''
+                    results.append(result)
+        
+        return results
     
     def _row_to_search_result(
         self, 
@@ -588,4 +886,385 @@ class DocumentDatabase:
             snippet = snippet + '...'
         
         return snippet
+    
+    # =========================================================================
+    # Processing Queue Methods (Crash Recovery)
+    # =========================================================================
+    
+    def queue_file_for_processing(self, file_path: str) -> int:
+        """
+        Add a file to the processing queue.
+        
+        Args:
+            file_path: Absolute path to the file
+            
+        Returns:
+            Queue entry ID
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute('''
+                    INSERT INTO processing_queue (file_path, status)
+                    VALUES (?, 'pending')
+                    ON CONFLICT(file_path) DO UPDATE SET
+                        status = 'pending',
+                        retry_count = retry_count + 1,
+                        queued_at = CURRENT_TIMESTAMP,
+                        error_message = NULL
+                ''', (file_path,))
+                conn.commit()
+                return cursor.lastrowid
+            except sqlite3.Error as e:
+                logger.error(f"Error queueing file: {e}")
+                return -1
+    
+    def mark_processing_started(self, file_path: str) -> bool:
+        """
+        Mark a file as currently being processed.
+        
+        Args:
+            file_path: Path to the file
+            
+        Returns:
+            True if successfully marked
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE processing_queue 
+                SET status = 'processing', started_at = CURRENT_TIMESTAMP
+                WHERE file_path = ?
+            ''', (file_path,))
+            conn.commit()
+            return cursor.rowcount > 0
+    
+    def mark_processing_completed(self, file_path: str, success: bool = True, 
+                                   error_message: str = None) -> bool:
+        """
+        Mark a file as completed (successfully or with error).
+        
+        Args:
+            file_path: Path to the file
+            success: Whether processing succeeded
+            error_message: Error message if failed
+            
+        Returns:
+            True if successfully marked
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            if success:
+                # Remove from queue on success
+                cursor.execute('''
+                    DELETE FROM processing_queue WHERE file_path = ?
+                ''', (file_path,))
+            else:
+                # Mark as failed with error
+                cursor.execute('''
+                    UPDATE processing_queue 
+                    SET status = 'failed', 
+                        completed_at = CURRENT_TIMESTAMP,
+                        error_message = ?
+                    WHERE file_path = ?
+                ''', (error_message, file_path))
+            conn.commit()
+            return cursor.rowcount > 0
+    
+    def get_pending_queue_items(self, include_failed: bool = False) -> List[Dict[str, Any]]:
+        """
+        Get all pending items from the processing queue.
+        
+        Used for crash recovery to resume processing.
+        
+        Args:
+            include_failed: Whether to include failed items for retry
+            
+        Returns:
+            List of queue items with file paths and status
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            
+            if include_failed:
+                cursor.execute('''
+                    SELECT id, file_path, status, retry_count, error_message,
+                           queued_at, started_at
+                    FROM processing_queue
+                    WHERE status IN ('pending', 'processing', 'failed')
+                    ORDER BY queued_at ASC
+                ''')
+            else:
+                cursor.execute('''
+                    SELECT id, file_path, status, retry_count, error_message,
+                           queued_at, started_at
+                    FROM processing_queue
+                    WHERE status IN ('pending', 'processing')
+                    ORDER BY queued_at ASC
+                ''')
+            
+            return [{
+                'id': row[0],
+                'file_path': row[1],
+                'status': row[2],
+                'retry_count': row[3],
+                'error_message': row[4],
+                'queued_at': row[5],
+                'started_at': row[6]
+            } for row in cursor.fetchall()]
+    
+    def get_interrupted_items(self) -> List[Dict[str, Any]]:
+        """
+        Get items that were being processed when the app crashed.
+        
+        These are items with status='processing' that never completed.
+        
+        Returns:
+            List of interrupted queue items
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT id, file_path, retry_count, queued_at, started_at
+                FROM processing_queue
+                WHERE status = 'processing'
+                ORDER BY started_at ASC
+            ''')
+            
+            return [{
+                'id': row[0],
+                'file_path': row[1],
+                'retry_count': row[2],
+                'queued_at': row[3],
+                'started_at': row[4]
+            } for row in cursor.fetchall()]
+    
+    def reset_interrupted_items(self) -> int:
+        """
+        Reset interrupted items back to pending status for reprocessing.
+        
+        Call this on startup to recover from crashes.
+        
+        Returns:
+            Number of items reset
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE processing_queue 
+                SET status = 'pending', started_at = NULL
+                WHERE status = 'processing'
+            ''')
+            conn.commit()
+            count = cursor.rowcount
+            if count > 0:
+                logger.info(f"Reset {count} interrupted processing items for recovery")
+            return count
+    
+    def clear_completed_queue_items(self, older_than_hours: int = 24) -> int:
+        """
+        Clean up old completed/failed queue items.
+        
+        Args:
+            older_than_hours: Remove items older than this many hours
+            
+        Returns:
+            Number of items removed
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                DELETE FROM processing_queue
+                WHERE status = 'failed'
+                  AND completed_at < datetime('now', ? || ' hours')
+            ''', (f'-{older_than_hours}',))
+            conn.commit()
+            return cursor.rowcount
+    
+    def get_queue_stats(self) -> Dict[str, int]:
+        """
+        Get processing queue statistics.
+        
+        Returns:
+            Dict with counts by status
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT status, COUNT(*) 
+                FROM processing_queue 
+                GROUP BY status
+            ''')
+            return {row[0]: row[1] for row in cursor.fetchall()}
+    
+    # =========================================================================
+    # Classification Corrections (Learning from User Feedback)
+    # =========================================================================
+    
+    def record_correction(
+        self, 
+        document_id: int,
+        original_category: str,
+        original_subcategory: str,
+        corrected_category: str,
+        corrected_subcategory: str,
+        document_type: str = '',
+        content_snippet: str = '',
+        filename: str = ''
+    ) -> int:
+        """
+        Record a classification correction for future learning.
+        
+        Called when a user manually reassigns a document to a different category.
+        
+        Args:
+            document_id: ID of the document being corrected
+            original_category: The AI's original classification
+            original_subcategory: The AI's original subcategory
+            corrected_category: The user's corrected category
+            corrected_subcategory: The user's corrected subcategory
+            document_type: Type of document (e.g., "invoice", "receipt")
+            content_snippet: First portion of document text for pattern matching
+            filename: Original filename for pattern extraction
+            
+        Returns:
+            ID of the correction record
+        """
+        # Extract filename pattern (remove numbers, dates, keep structure)
+        import re
+        filename_pattern = ''
+        if filename:
+            # Remove date patterns, numbers, keep structure
+            pattern = re.sub(r'\d{4}[-_]\d{2}[-_]\d{2}', 'DATE', filename)
+            pattern = re.sub(r'\d+', 'N', pattern)
+            filename_pattern = pattern
+        
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO classification_corrections 
+                    (document_id, original_category, original_subcategory,
+                     corrected_category, corrected_subcategory, document_type,
+                     content_snippet, filename_pattern)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (document_id, original_category, original_subcategory,
+                  corrected_category, corrected_subcategory, document_type,
+                  content_snippet[:500] if content_snippet else '',  # Limit size
+                  filename_pattern))
+            conn.commit()
+            
+            logger.info(f"Recorded correction: {original_category} -> {corrected_category}")
+            return cursor.lastrowid
+    
+    def get_relevant_corrections(
+        self, 
+        document_type: str = '',
+        content_hint: str = '',
+        limit: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Get relevant past corrections to use as few-shot examples.
+        
+        Finds corrections that may be relevant to the current document
+        based on document type and content similarity.
+        
+        Args:
+            document_type: Type of document being classified
+            content_hint: Brief content description or keywords
+            limit: Maximum corrections to return
+            
+        Returns:
+            List of relevant corrections with original/corrected categories
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            
+            corrections = []
+            seen_pairs = set()  # Avoid duplicate correction patterns
+            
+            # Strategy 1: Same document type
+            if document_type:
+                cursor.execute('''
+                    SELECT original_category, original_subcategory,
+                           corrected_category, corrected_subcategory,
+                           document_type, content_snippet
+                    FROM classification_corrections
+                    WHERE LOWER(document_type) LIKE ?
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                ''', (f'%{document_type.lower()}%', limit))
+                
+                for row in cursor.fetchall():
+                    pair_key = f"{row[0]}|{row[2]}"  # orig_cat|corrected_cat
+                    if pair_key not in seen_pairs:
+                        seen_pairs.add(pair_key)
+                        corrections.append({
+                            'original_category': row[0],
+                            'original_subcategory': row[1] or '',
+                            'corrected_category': row[2],
+                            'corrected_subcategory': row[3] or '',
+                            'document_type': row[4] or '',
+                            'reason': f"Similar document type: {row[4]}"
+                        })
+            
+            # Strategy 2: Get most common corrections overall
+            if len(corrections) < limit:
+                cursor.execute('''
+                    SELECT original_category, original_subcategory,
+                           corrected_category, corrected_subcategory,
+                           document_type, COUNT(*) as freq
+                    FROM classification_corrections
+                    GROUP BY original_category, corrected_category
+                    ORDER BY freq DESC
+                    LIMIT ?
+                ''', (limit - len(corrections),))
+                
+                for row in cursor.fetchall():
+                    pair_key = f"{row[0]}|{row[2]}"
+                    if pair_key not in seen_pairs:
+                        seen_pairs.add(pair_key)
+                        corrections.append({
+                            'original_category': row[0],
+                            'original_subcategory': row[1] or '',
+                            'corrected_category': row[2],
+                            'corrected_subcategory': row[3] or '',
+                            'document_type': row[4] or '',
+                            'reason': f"Common correction pattern ({row[5]} times)"
+                        })
+            
+            return corrections[:limit]
+    
+    def get_correction_stats(self) -> Dict[str, Any]:
+        """
+        Get statistics about classification corrections.
+        
+        Returns:
+            Dict with correction counts and patterns
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Total corrections
+            cursor.execute('SELECT COUNT(*) FROM classification_corrections')
+            total = cursor.fetchone()[0]
+            
+            # Most common corrections
+            cursor.execute('''
+                SELECT original_category, corrected_category, COUNT(*) as freq
+                FROM classification_corrections
+                GROUP BY original_category, corrected_category
+                ORDER BY freq DESC
+                LIMIT 10
+            ''')
+            
+            common = [{
+                'from': row[0],
+                'to': row[1],
+                'count': row[2]
+            } for row in cursor.fetchall()]
+            
+            return {
+                'total_corrections': total,
+                'common_patterns': common
+            }
 

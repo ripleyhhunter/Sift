@@ -24,13 +24,17 @@ class DocumentClassifier:
     
     Uses text extraction for PDFs, Word docs, Excel files (fast).
     Falls back to vision model for image files.
+    Incorporates user feedback from past corrections for learning.
+    Supports custom classification rules that bypass LLM.
     """
     
     def __init__(
         self,
         config: Config,
         llm_client: LMStudioClient,
-        processor: DocumentProcessor
+        processor: DocumentProcessor,
+        database=None,
+        rules_engine=None
     ):
         """Initialize the classifier."""
         self.config = config
@@ -38,10 +42,14 @@ class DocumentClassifier:
         self.processor = processor
         self.base_path = config.folders.base_path
         self.confidence_threshold = config.behavior.confidence_threshold
+        self._database = database  # For learning from corrections
+        self._rules_engine = rules_engine  # For custom classification rules
     
     def classify(self, file_path: Path) -> ClassificationResult:
         """
         Classify a document using text extraction (fast, text-only model).
+        
+        First checks custom rules, then falls back to LLM classification.
         
         Args:
             file_path: Path to the document
@@ -50,6 +58,12 @@ class DocumentClassifier:
             Classification result
         """
         logger.info(f"Classifying: {file_path.name}")
+        
+        # Check custom rules first (highest priority)
+        rule_result = self._check_custom_rules(file_path)
+        if rule_result:
+            logger.info(f"Custom rule matched: {rule_result.reasoning}")
+            return rule_result
         
         # Get existing folders for context
         existing_folders = self.get_existing_folders()
@@ -87,13 +101,29 @@ class DocumentClassifier:
             # Get full category structure with subcategories
             category_structure = self.get_category_structure()
             
+            # Get relevant past corrections for few-shot learning
+            past_corrections = None
+            if self._database:
+                try:
+                    # Get document type hint from filename for relevant corrections
+                    doc_type_hint = self._guess_document_type(file_path.name)
+                    past_corrections = self._database.get_relevant_corrections(
+                        document_type=doc_type_hint,
+                        limit=3
+                    )
+                    if past_corrections:
+                        logger.debug(f"Using {len(past_corrections)} past corrections for learning")
+                except Exception as e:
+                    logger.debug(f"Could not fetch past corrections: {e}")
+            
             # Pass file_path for metadata extraction
             result = self.llm_client.classify_document_text(
                 text=text,
                 filename=file_path.name,
                 existing_folders=existing_folders,
                 category_structure=category_structure,
-                file_path=file_path  # For metadata extraction
+                file_path=file_path,  # For metadata extraction
+                past_corrections=past_corrections  # For few-shot learning
             )
             
             # If LLM returned a fallback (timeout, error), try filename-based classification
@@ -109,6 +139,60 @@ class DocumentClassifier:
             logger.error(f"Text classification failed: {e}")
             # Fall back to filename-based classification instead of giving up
             return self._classify_by_filename(file_path, existing_folders)
+    
+    def _guess_document_type(self, filename: str) -> str:
+        """Guess document type from filename for fetching relevant corrections."""
+        filename_lower = filename.lower()
+        
+        type_keywords = {
+            'invoice': ['invoice', 'bill', 'inv-'],
+            'receipt': ['receipt', 'rcpt'],
+            'contract': ['contract', 'agreement'],
+            'resume': ['resume', 'cv', 'curriculum'],
+            'tax': ['tax', 'w2', '1099', 'w-2'],
+            'bank': ['bank', 'statement'],
+            'insurance': ['insurance', 'policy'],
+            'medical': ['medical', 'health', 'prescription'],
+        }
+        
+        for doc_type, keywords in type_keywords.items():
+            if any(kw in filename_lower for kw in keywords):
+                return doc_type
+        
+        return ''
+    
+    def _check_custom_rules(self, file_path: Path) -> Optional[ClassificationResult]:
+        """
+        Check if any custom rules match this document.
+        
+        Args:
+            file_path: Path to the document
+            
+        Returns:
+            ClassificationResult if a rule matched, None otherwise
+        """
+        if not self._rules_engine:
+            return None
+        
+        # Get content for rule matching (if already extractable)
+        content = ''
+        if self.processor.can_extract_text(file_path):
+            try:
+                content = self.processor.extract_text(file_path) or ''
+            except Exception:
+                pass
+        
+        # Apply rules
+        match = self._rules_engine.apply(file_path.name, content)
+        
+        if match:
+            return ClassificationResult.from_dict(match)
+        
+        return None
+    
+    def set_rules_engine(self, rules_engine) -> None:
+        """Set or update the rules engine."""
+        self._rules_engine = rules_engine
     
     def _classify_by_filename(
         self,

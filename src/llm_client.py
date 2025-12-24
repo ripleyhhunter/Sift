@@ -407,8 +407,10 @@ class LMStudioClient:
             if response.status_code == 200:
                 data = response.json()
                 return [m.get('id', '') for m in data.get('data', [])]
+            logger.debug(f"LMStudio returned status {response.status_code} for models list")
             return []
-        except Exception:
+        except requests.exceptions.RequestException as e:
+            logger.debug(f"Could not fetch loaded models: {e}")
             return []
     
     def _sample_text(self, text: str, max_chars: int = 2000) -> str:
@@ -447,15 +449,17 @@ class LMStudioClient:
         metadata: Optional[DocumentMetadata] = None,
         category_structure: Optional[Dict[str, List[str]]] = None,
         filename: str = "",
-        existing_folders: Optional[List[str]] = None
+        existing_folders: Optional[List[str]] = None,
+        past_corrections: Optional[List[Dict[str, Any]]] = None
     ) -> str:
         """
         Build a structured user prompt with document data.
         
-        The prompt has three clear sections:
+        The prompt has sections:
         1. DOCUMENT METADATA - File information
         2. FOLDER STRUCTURE - Existing organization
-        3. DOCUMENT CONTENT - Extracted text
+        3. PAST CORRECTIONS - Learning from user feedback (if any)
+        4. DOCUMENT CONTENT - Extracted text
         
         Args:
             content: Extracted/sampled document content
@@ -463,6 +467,7 @@ class LMStudioClient:
             category_structure: Dict mapping categories to subcategories
             filename: Fallback filename if no metadata provided
             existing_folders: Fallback folder list if no structure provided
+            past_corrections: List of past classification corrections for few-shot learning
             
         Returns:
             Formatted user prompt
@@ -515,7 +520,19 @@ Reply with JSON only. /no_think"""
         else:
             sections.append("## EXISTING FOLDERS\nNo folders exist yet. Create categories as needed.")
         
-        # === SECTION 3: DOCUMENT CONTENT ===
+        # === SECTION 3: PAST CORRECTIONS (if any) ===
+        if past_corrections and len(past_corrections) > 0:
+            corrections_text = "## LEARNING FROM PAST CORRECTIONS\n"
+            corrections_text += "The user has previously corrected these classifications:\n"
+            for corr in past_corrections[:3]:  # Limit to 3 examples
+                corrections_text += f"- Documents of type '{corr.get('document_type', 'unknown')}' "
+                corrections_text += f"should go in {corr['corrected_category']}"
+                if corr.get('corrected_subcategory'):
+                    corrections_text += f"/{corr['corrected_subcategory']}"
+                corrections_text += f" (NOT {corr['original_category']})\n"
+            sections.append(corrections_text)
+        
+        # === SECTION 4: DOCUMENT CONTENT ===
         sections.append(f"## DOCUMENT CONTENT\n```\n{content}\n```")
         
         # === SECTION 4: TASK (varies by model size) ===
@@ -559,7 +576,8 @@ Respond with valid JSON only. No other text. /no_think"""
         filename: str,
         existing_folders: List[str],
         category_structure: Optional[Dict[str, List[str]]] = None,
-        file_path: Optional[Path] = None
+        file_path: Optional[Path] = None,
+        past_corrections: Optional[List[Dict[str, Any]]] = None
     ) -> ClassificationResult:
         """
         Classify a document based on its text content.
@@ -568,7 +586,8 @@ Respond with valid JSON only. No other text. /no_think"""
         1. Extracts metadata from the file (if path provided)
         2. Samples the document content appropriately for the model size
         3. Builds a structured prompt with metadata, folder structure, and content
-        4. Sends to the LLM and parses the response
+        4. Includes relevant past corrections for few-shot learning
+        5. Sends to the LLM and parses the response
         
         Args:
             text: Extracted text from the document
@@ -576,6 +595,7 @@ Respond with valid JSON only. No other text. /no_think"""
             existing_folders: List of existing category folder names
             category_structure: Dict mapping category names to their subcategories
             file_path: Optional path to file for metadata extraction
+            past_corrections: List of past classification corrections for learning
             
         Returns:
             Classification result
@@ -604,6 +624,7 @@ Respond with valid JSON only. No other text. /no_think"""
                 content=sampled_text,
                 metadata=metadata,
                 category_structure=category_structure,
+                past_corrections=past_corrections,
                 filename=filename,
                 existing_folders=existing_folders
             )
@@ -832,11 +853,12 @@ Respond with valid JSON only. No other text. /no_think"""
                     if isinstance(data, dict) and 'primary_category' in data:
                         logger.info("Repaired truncated JSON successfully")
                         return data
-                except:
+                except json.JSONDecodeError:
                     continue
             
             return None
-        except:
+        except Exception as e:
+            logger.debug(f"JSON repair failed: {e}")
             return None
     
     def _extract_fields_manually(self, content: str) -> Optional[Dict[str, Any]]:

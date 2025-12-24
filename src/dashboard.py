@@ -296,6 +296,82 @@ DASHBOARD_HTML = '''
             width: 100%;
         }
         
+        /* Thumbnail styles */
+        .doc-thumbnail {
+            width: 48px;
+            height: 48px;
+            min-width: 48px;
+            border-radius: 6px;
+            overflow: hidden;
+            background: var(--bg-tertiary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+        }
+        
+        .doc-thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .thumbnail-placeholder {
+            font-size: 24px;
+            opacity: 0.7;
+        }
+        
+        .doc-text-info {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        /* Batch selection styles */
+        .doc-checkbox {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            cursor: pointer;
+            accent-color: var(--accent);
+        }
+        
+        .doc-item.selected {
+            background: rgba(59, 130, 246, 0.15);
+            border-color: var(--accent);
+        }
+        
+        .batch-actions {
+            display: none;
+            padding: 12px 16px;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            margin-bottom: 12px;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .batch-actions.visible {
+            display: flex;
+        }
+        
+        .batch-count {
+            font-weight: 600;
+            color: var(--accent);
+            margin-right: auto;
+        }
+        
+        /* Keyboard shortcut hints */
+        .shortcut-hint {
+            display: inline-block;
+            padding: 2px 6px;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+            font-size: 11px;
+            font-family: monospace;
+            color: var(--text-muted);
+            margin-left: 6px;
+        }
+        
         .expand-icon {
             display: inline-block;
             margin-right: 8px;
@@ -824,8 +900,22 @@ DASHBOARD_HTML = '''
                         ⚠️ Needs Review
                         <span class="card-badge warning" id="reviewBadge">0</span>
                     </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button class="btn btn-ghost" onclick="selectAllDocs()" title="Select all (Ctrl+A)">
+                            ☑️ All
+                        </button>
                     <button class="refresh-btn" onclick="loadReviewDocs()" title="Refresh">🔄</button>
                 </div>
+                </div>
+                
+                <!-- Batch actions bar -->
+                <div class="batch-actions" id="batchActions">
+                    <span class="batch-count" id="batchCount">0 selected</span>
+                    <button class="btn btn-primary" onclick="batchApprove()">✓ Approve All</button>
+                    <button class="btn btn-secondary" onclick="batchReassign()">📁 Move All</button>
+                    <button class="btn btn-ghost" onclick="clearSelection()">✕ Clear</button>
+                </div>
+                
                 <div class="card-body" id="reviewList">
                     <div class="empty-state">
                         <div class="icon">✨</div>
@@ -839,7 +929,12 @@ DASHBOARD_HTML = '''
                     <div class="card-title">
                         📋 Recent Activity
                     </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button class="btn btn-ghost" onclick="undoLast()" title="Undo last action" id="undoBtn">
+                            ↩️ Undo
+                        </button>
                     <button class="refresh-btn" onclick="loadRecentDocs()" title="Refresh">🔄</button>
+                    </div>
                 </div>
                 <div class="card-body" id="recentList">
                     <div class="loading"></div>
@@ -882,6 +977,47 @@ DASHBOARD_HTML = '''
             if (confidence >= 0.8) return 'confidence-high';
             if (confidence >= 0.6) return 'confidence-medium';
             return 'confidence-low';
+        }
+        
+        // Get file icon based on extension
+        function getFileIcon(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            const icons = {
+                'pdf': '📄',
+                'doc': '📝', 'docx': '📝',
+                'xls': '📊', 'xlsx': '📊', 'csv': '📊',
+                'ppt': '📽️', 'pptx': '📽️',
+                'jpg': '🖼️', 'jpeg': '🖼️', 'png': '🖼️', 'gif': '🖼️', 'webp': '🖼️',
+                'txt': '📃',
+                'zip': '📦', 'rar': '📦', '7z': '📦'
+            };
+            return icons[ext] || '📁';
+        }
+        
+        // Load thumbnail for a document
+        async function loadThumbnail(element) {
+            const path = element.dataset.path;
+            if (!path) return;
+            
+            try {
+                const res = await fetch(`${API_BASE}/api/thumbnail?path=${encodeURIComponent(path)}`);
+                const data = await res.json();
+                
+                if (data.thumbnail) {
+                    element.innerHTML = `<img src="${data.thumbnail}" alt="Preview" loading="lazy">`;
+                }
+            } catch (err) {
+                // Keep placeholder on error
+            }
+        }
+        
+        // Load thumbnails for visible documents
+        function loadVisibleThumbnails() {
+            document.querySelectorAll('.doc-thumbnail[data-path]').forEach(el => {
+                if (!el.querySelector('img')) {
+                    loadThumbnail(el);
+                }
+            });
         }
         
         // Toggle document details expansion
@@ -964,6 +1100,10 @@ DASHBOARD_HTML = '''
                 const html = docs.map(doc => `
                     <div class="doc-item doc-expandable" onclick="toggleDocDetails(this)">
                         <div class="doc-info">
+                            <div class="doc-thumbnail" data-path="${doc.current_path}">
+                                <div class="thumbnail-placeholder">${getFileIcon(doc.original_filename)}</div>
+                            </div>
+                            <div class="doc-text-info">
                             <div class="doc-name" title="${doc.original_filename}">
                                 <span class="expand-icon">▶</span>
                                 ${doc.original_filename}
@@ -976,6 +1116,7 @@ DASHBOARD_HTML = '''
                                     ${Math.round(doc.confidence * 100)}%
                                 </span>
                                 <span class="doc-time">${formatTime(doc.processed_at)}</span>
+                                </div>
                             </div>
                         </div>
                         <div class="doc-details" style="display: none;">
@@ -998,6 +1139,9 @@ DASHBOARD_HTML = '''
                 `).join('');
                 
                 document.getElementById('recentList').innerHTML = `<ul class="doc-list">${html}</ul>`;
+                
+                // Load thumbnails after a short delay
+                setTimeout(loadVisibleThumbnails, 100);
                 
             } catch (err) {
                 console.error('Failed to load recent docs:', err);
@@ -1031,6 +1175,8 @@ DASHBOARD_HTML = '''
                 const html = docs.map(doc => `
                     <div class="doc-item" id="review-${doc.id}">
                         <div class="doc-main">
+                            <input type="checkbox" class="doc-checkbox" data-doc-id="${doc.id}"
+                                   onclick="toggleDocSelection(${doc.id}, this, event)">
                             <div class="doc-info">
                                 <div class="doc-name" title="${doc.original_filename}">${doc.original_filename}</div>
                                 <div class="doc-meta">
@@ -1131,6 +1277,213 @@ DASHBOARD_HTML = '''
                 showToast('Failed to approve', 'error');
             }
         }
+        
+        // Undo functionality
+        async function undoLast() {
+            const undoBtn = document.getElementById('undoBtn');
+            undoBtn.disabled = true;
+            undoBtn.textContent = '↩️ Undoing...';
+            
+            try {
+                const res = await fetch(`${API_BASE}/api/undo-last`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast(`Undone: ${data.filename} moved back`);
+                    loadStats();
+                    loadRecentDocs();
+                    loadReviewDocs();
+                } else {
+                    showToast(data.error || 'Nothing to undo', 'error');
+                }
+            } catch (err) {
+                showToast('Undo failed', 'error');
+            } finally {
+                undoBtn.disabled = false;
+                undoBtn.textContent = '↩️ Undo';
+            }
+        }
+        
+        async function undoAction(actionId) {
+            try {
+                const res = await fetch(`${API_BASE}/api/undo`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action_id: actionId })
+                });
+                
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast(`Undone: ${data.filename}`);
+                    loadStats();
+                    loadRecentDocs();
+                } else {
+                    showToast(data.error || 'Undo failed', 'error');
+                }
+            } catch (err) {
+                showToast('Undo failed', 'error');
+            }
+        }
+        
+        // ========================================
+        // Batch Operations
+        // ========================================
+        
+        let selectedDocIds = new Set();
+        
+        function toggleDocSelection(docId, checkbox, event) {
+            if (event) event.stopPropagation();
+            
+            if (checkbox.checked) {
+                selectedDocIds.add(docId);
+            } else {
+                selectedDocIds.delete(docId);
+            }
+            
+            // Update visual selection
+            const docItem = checkbox.closest('.doc-item');
+            if (docItem) {
+                docItem.classList.toggle('selected', checkbox.checked);
+            }
+            
+            updateBatchActions();
+        }
+        
+        function updateBatchActions() {
+            const batchBar = document.getElementById('batchActions');
+            const countSpan = document.getElementById('batchCount');
+            
+            if (selectedDocIds.size > 0) {
+                batchBar.classList.add('visible');
+                countSpan.textContent = `${selectedDocIds.size} selected`;
+            } else {
+                batchBar.classList.remove('visible');
+            }
+        }
+        
+        function selectAllDocs() {
+            const checkboxes = document.querySelectorAll('.doc-checkbox');
+            checkboxes.forEach(cb => {
+                cb.checked = true;
+                const docId = parseInt(cb.dataset.docId);
+                if (docId) selectedDocIds.add(docId);
+                cb.closest('.doc-item')?.classList.add('selected');
+            });
+            updateBatchActions();
+        }
+        
+        function clearSelection() {
+            selectedDocIds.clear();
+            document.querySelectorAll('.doc-checkbox').forEach(cb => {
+                cb.checked = false;
+                cb.closest('.doc-item')?.classList.remove('selected');
+            });
+            updateBatchActions();
+        }
+        
+        async function batchApprove() {
+            if (selectedDocIds.size === 0) return;
+            
+            const res = await fetch(`${API_BASE}/api/batch`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'approve', doc_ids: Array.from(selectedDocIds) })
+            });
+            
+            const data = await res.json();
+            showToast(`Approved ${data.processed} documents`);
+            clearSelection();
+            loadStats();
+            loadReviewDocs();
+            loadRecentDocs();
+        }
+        
+        async function batchReassign() {
+            if (selectedDocIds.size === 0) return;
+            
+            const category = prompt('Enter category name:');
+            if (!category) return;
+            
+            const subcategory = prompt('Enter subcategory (optional):') || '';
+            
+            const res = await fetch(`${API_BASE}/api/batch`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    action: 'reassign', 
+                    doc_ids: Array.from(selectedDocIds),
+                    category: category,
+                    subcategory: subcategory
+                })
+            });
+            
+            const data = await res.json();
+            showToast(`Moved ${data.processed} documents to ${category}`);
+            clearSelection();
+            loadStats();
+            loadReviewDocs();
+            loadRecentDocs();
+        }
+        
+        // ========================================
+        // Keyboard Shortcuts
+        // ========================================
+        
+        document.addEventListener('keydown', (e) => {
+            // Don't trigger shortcuts when typing in inputs
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            
+            // Ctrl/Cmd + Z = Undo
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+                e.preventDefault();
+                undoLast();
+            }
+            
+            // Ctrl/Cmd + A = Select all (when in review tab)
+            if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+                e.preventDefault();
+                selectAllDocs();
+            }
+            
+            // Escape = Clear selection
+            if (e.key === 'Escape') {
+                clearSelection();
+            }
+            
+            // R = Refresh
+            if (e.key === 'r' && !e.ctrlKey && !e.metaKey) {
+                loadStats();
+                loadRecentDocs();
+                loadReviewDocs();
+                showToast('Refreshed');
+            }
+            
+            // 1 = Dashboard tab
+            if (e.key === '1') {
+                document.querySelector('[data-tab="dashboard"]')?.click();
+            }
+            
+            // 2 = Review tab  
+            if (e.key === '2') {
+                document.querySelector('[data-tab="review"]')?.click();
+            }
+            
+            // 3 = Search tab
+            if (e.key === '3') {
+                document.querySelector('[data-tab="search"]')?.click();
+            }
+            
+            // / = Focus search
+            if (e.key === '/') {
+                e.preventDefault();
+                document.getElementById('searchInput')?.focus();
+            }
+        });
         
         // Check status
         async function checkStatus() {
@@ -1414,6 +1767,19 @@ class DashboardServer:
         self._llm_client = None  # Set later via set_llm_client()
         self._watcher = None     # Set later via set_watcher()
         
+        # Initialize thumbnail generator
+        try:
+            from .thumbnail import ThumbnailGenerator
+            cache_dir = config.folders.base_path / '.sift_cache' / 'thumbnails'
+            self._thumbnail_generator = ThumbnailGenerator(cache_dir)
+            if self._thumbnail_generator.is_available:
+                logger.debug("Thumbnail generation enabled")
+            else:
+                self._thumbnail_generator = None
+        except ImportError:
+            self._thumbnail_generator = None
+            logger.debug("Thumbnail generation not available")
+        
         # Disable Flask's default logging
         log = logging.getLogger('werkzeug')
         log.setLevel(logging.WARNING)
@@ -1539,6 +1905,20 @@ class DashboardServer:
                 self.database.update_document_location(
                     doc_id, str(new_path), category, subcategory, 'manual_override'
                 )
+                
+                # Record the correction for learning
+                if doc.category != category or doc.subcategory != subcategory:
+                    self.database.record_correction(
+                        document_id=doc.id,
+                        original_category=doc.category,
+                        original_subcategory=doc.subcategory,
+                        corrected_category=category,
+                        corrected_subcategory=subcategory,
+                        document_type=doc.document_type,
+                        content_snippet=getattr(doc, 'content_summary', ''),
+                        filename=doc.original_filename
+                    )
+                
                 logger.info(f"Reassigned {doc.original_filename} to {category}/{subcategory}")
                 return jsonify({'success': True, 'new_path': str(new_path)})
             except Exception as e:
@@ -1567,6 +1947,148 @@ class DashboardServer:
             )
             
             return jsonify({'success': True})
+        
+        @app.route('/api/undo-history')
+        def api_undo_history():
+            """Get list of undoable actions."""
+            limit = request.args.get('limit', 10, type=int)
+            actions = self.database.get_undoable_actions(limit)
+            return jsonify({'actions': actions})
+        
+        @app.route('/api/undo', methods=['POST'])
+        def api_undo():
+            """Undo a specific action."""
+            data = request.get_json()
+            action_id = data.get('action_id')
+            
+            if not action_id:
+                return jsonify({'success': False, 'error': 'Missing action_id'})
+            
+            result = self.database.undo_action(action_id)
+            return jsonify(result)
+        
+        @app.route('/api/undo-last', methods=['POST'])
+        def api_undo_last():
+            """Undo the most recent action."""
+            last_action = self.database.get_last_action()
+            
+            if not last_action:
+                return jsonify({'success': False, 'error': 'No actions to undo'})
+            
+            result = self.database.undo_action(last_action['id'])
+            return jsonify(result)
+        
+        @app.route('/api/batch', methods=['POST'])
+        def api_batch():
+            """Perform batch operations on multiple documents."""
+            from .utils import sanitize_folder_name
+            
+            data = request.get_json()
+            action = data.get('action')
+            doc_ids = data.get('doc_ids', [])
+            
+            if not action or not doc_ids:
+                return jsonify({'success': False, 'error': 'Missing action or doc_ids'})
+            
+            results = {'success': True, 'processed': 0, 'failed': 0, 'errors': []}
+            
+            if action == 'approve':
+                # Batch approve documents
+                for doc_id in doc_ids:
+                    try:
+                        doc = self.database.get_document_by_id(doc_id)
+                        if doc:
+                            self.database.update_document_location(
+                                doc_id, doc.current_path, doc.category,
+                                doc.subcategory, 'processed'
+                            )
+                            results['processed'] += 1
+                        else:
+                            results['failed'] += 1
+                            results['errors'].append(f"Doc {doc_id} not found")
+                    except Exception as e:
+                        results['failed'] += 1
+                        results['errors'].append(str(e))
+                        
+            elif action == 'reassign':
+                # Batch move documents to a category
+                category = sanitize_folder_name(data.get('category', ''))
+                subcategory = sanitize_folder_name(data.get('subcategory', ''))
+                
+                if not category:
+                    return jsonify({'success': False, 'error': 'Missing category'})
+                
+                for doc_id in doc_ids:
+                    try:
+                        doc = self.database.get_document_by_id(doc_id)
+                        if not doc:
+                            results['failed'] += 1
+                            continue
+                        
+                        current_path = Path(doc.current_path)
+                        if not current_path.exists():
+                            results['failed'] += 1
+                            continue
+                        
+                        new_folder = self.config.folders.base_path / category
+                        if subcategory:
+                            new_folder = new_folder / subcategory
+                        new_folder.mkdir(parents=True, exist_ok=True)
+                        
+                        new_path = new_folder / current_path.name
+                        if new_path.exists():
+                            counter = 1
+                            while new_path.exists():
+                                new_path = new_folder / f"{current_path.stem}_{counter}{current_path.suffix}"
+                                counter += 1
+                        
+                        shutil.move(str(current_path), str(new_path))
+                        self.database.update_document_location(
+                            doc_id, str(new_path), category, subcategory, 'manual_override'
+                        )
+                        
+                        # Record correction for learning
+                        if doc.category != category or doc.subcategory != subcategory:
+                            self.database.record_correction(
+                                document_id=doc.id,
+                                original_category=doc.category,
+                                original_subcategory=doc.subcategory,
+                                corrected_category=category,
+                                corrected_subcategory=subcategory,
+                                document_type=doc.document_type,
+                                filename=doc.original_filename
+                            )
+                        
+                        results['processed'] += 1
+                    except Exception as e:
+                        results['failed'] += 1
+                        results['errors'].append(str(e))
+                        
+            elif action == 'delete':
+                # Batch delete (move to trash/review for safety)
+                for doc_id in doc_ids:
+                    try:
+                        doc = self.database.get_document_by_id(doc_id)
+                        if doc:
+                            current_path = Path(doc.current_path)
+                            if current_path.exists():
+                                # Move to Needs_Review instead of deleting
+                                review_folder = self.config.folders.base_path / 'Needs_Review'
+                                review_folder.mkdir(parents=True, exist_ok=True)
+                                new_path = review_folder / current_path.name
+                                shutil.move(str(current_path), str(new_path))
+                                self.database.update_document_location(
+                                    doc_id, str(new_path), 'Needs_Review', '', 'deleted'
+                                )
+                            results['processed'] += 1
+                    except Exception as e:
+                        results['failed'] += 1
+                        results['errors'].append(str(e))
+            else:
+                return jsonify({'success': False, 'error': f'Unknown action: {action}'})
+            
+            results['success'] = results['failed'] == 0
+            return jsonify(results)
         
         @app.route('/api/search')
         def api_search():
@@ -1615,6 +2137,34 @@ class DashboardServer:
                 'category_hint': category_hint,
                 'query': query
             })
+        
+        @app.route('/api/thumbnail')
+        def api_thumbnail():
+            """Generate and return a thumbnail for a document."""
+            path = request.args.get('path', '')
+            
+            if not path:
+                return jsonify({'error': 'No path provided'}), 400
+            
+            from pathlib import Path as PathLib
+            try:
+                resolved_path = PathLib(path).resolve()
+                # Security: Only allow paths within Sift base folder
+                base_resolved = self.config.folders.base_path.resolve()
+                if not str(resolved_path).startswith(str(base_resolved)):
+                    return jsonify({'error': 'Access denied'}), 403
+                if not resolved_path.exists():
+                    return jsonify({'error': 'File not found'}), 404
+            except Exception:
+                return jsonify({'error': 'Invalid path'}), 400
+            
+            # Generate thumbnail
+            if self._thumbnail_generator:
+                thumbnail = self._thumbnail_generator.get_thumbnail(resolved_path)
+                if thumbnail:
+                    return jsonify({'thumbnail': thumbnail})
+            
+            return jsonify({'thumbnail': None})
         
         @app.route('/api/open-folder', methods=['POST'])
         def api_open_folder():

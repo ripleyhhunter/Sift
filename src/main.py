@@ -62,7 +62,21 @@ class Sift:
         # Initialize components
         self.processor = DocumentProcessor(config)
         self.llm_client = LMStudioClient(config)
-        self.classifier = DocumentClassifier(config, self.llm_client, self.processor)
+        
+        # Initialize rules engine if custom rules are defined
+        rules_engine = None
+        if config.advanced.custom_rules:
+            try:
+                from .rules_engine import RulesEngine
+                rules_engine = RulesEngine.from_config(config.advanced.custom_rules)
+                logger.info(f"Loaded {len(config.advanced.custom_rules)} custom classification rules")
+            except Exception as e:
+                logger.warning(f"Could not load custom rules: {e}")
+        
+        self.classifier = DocumentClassifier(
+            config, self.llm_client, self.processor, 
+            database=self.database, rules_engine=rules_engine
+        )
         self.organizer = FolderOrganizer(config)
         self.watcher: Optional[DocumentWatcher] = None
         
@@ -139,8 +153,12 @@ class Sift:
             self.dashboard.start(open_browser=self.config.dashboard.auto_open_browser)
             logger.info(f"Dashboard available at: http://localhost:{self.config.dashboard.port}")
         
-        # Create watcher
-        self.watcher = DocumentWatcher(self.config, self._process_file)
+        # Create watcher with database for crash recovery
+        self.watcher = DocumentWatcher(
+            self.config, 
+            self._process_file,
+            database=self.database
+        )
         
         # Connect watcher to dashboard for batch status
         if self.dashboard:
@@ -284,8 +302,10 @@ class Sift:
                         })(),
                     force_review=True
                 )
-            except Exception:
-                logger.error(f"Could not move file to review folder: {file_path}")
+            except (OSError, PermissionError) as move_error:
+                logger.error(f"Could not move file to review folder: {file_path} - {move_error}")
+            except Exception as move_error:
+                logger.error(f"Unexpected error moving file to review folder: {file_path} - {move_error}")
     
     def _wait_for_lmstudio(self, max_attempts: int = 5, delay: float = 5.0) -> bool:
         """
@@ -550,8 +570,8 @@ def main() -> int:
         if not app._wait_for_lmstudio():
             return 1
         
-        # Create watcher just for scanning
-        app.watcher = DocumentWatcher(config, app._process_file)
+        # Create watcher just for scanning (with database for crash recovery)
+        app.watcher = DocumentWatcher(config, app._process_file, database=app.database)
         count = app.watcher.scan_existing()
         
         if count > 0:

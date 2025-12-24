@@ -210,7 +210,9 @@ class DocumentEventHandler(FileSystemEventHandler):
                 
                 time.sleep(1.0)
                 
-            except Exception:
+            except (OSError, PermissionError) as e:
+                # Folder may be locked during copy - wait and retry
+                logger.debug(f"Error checking folder size (retrying): {e}")
                 time.sleep(1.0)
         
         return False
@@ -325,6 +327,7 @@ class DocumentWatcher:
     - Retry logic for locked/failed files
     - Progress tracking
     - Health monitoring
+    - Crash recovery via persistent queue
     """
     
     # Processing delays (in seconds)
@@ -333,13 +336,15 @@ class DocumentWatcher:
     MAX_RETRY_ATTEMPTS = 3     # Retries for locked files
     RETRY_DELAY = 10.0         # Delay between retries
     
-    def __init__(self, config: Config, on_file: Callable[[Path], None]):
+    def __init__(self, config: Config, on_file: Callable[[Path], None], 
+                 database=None):
         """
         Initialize the document watcher.
         
         Args:
             config: Application configuration
             on_file: Callback function to process each file
+            database: Optional DocumentDatabase for crash recovery
         """
         self.config = config
         self.on_file = on_file
@@ -349,6 +354,7 @@ class DocumentWatcher:
         self.observer: Optional[Observer] = None
         self._running = False
         self._processing_thread: Optional[threading.Thread] = None
+        self._database = database  # For crash recovery
         
         # Progress tracking
         self._total_queued = 0
@@ -368,6 +374,9 @@ class DocumentWatcher:
         if not self.watch_path.exists():
             logger.info(f"Creating watch folder: {self.watch_path}")
             self.watch_path.mkdir(parents=True, exist_ok=True)
+        
+        # Recover any interrupted items from previous crash
+        self._recover_interrupted_items()
         
         # Create event handler
         event_handler = DocumentEventHandler(
@@ -394,6 +403,49 @@ class DocumentWatcher:
         self._processing_thread.start()
         
         logger.info(f"Started watching folder: {self.watch_path}")
+    
+    def _recover_interrupted_items(self) -> int:
+        """
+        Recover items that were being processed when the app crashed.
+        
+        Returns:
+            Number of items recovered
+        """
+        if not self._database:
+            return 0
+        
+        try:
+            # Reset any items that were mid-processing
+            reset_count = self._database.reset_interrupted_items()
+            
+            # Get all pending items (including just-reset ones)
+            pending_items = self._database.get_pending_queue_items(include_failed=False)
+            
+            recovered = 0
+            for item in pending_items:
+                file_path = Path(item['file_path'])
+                if file_path.exists():
+                    self.file_queue.put(file_path)
+                    recovered += 1
+                    logger.debug(f"Recovered from queue: {file_path.name}")
+                else:
+                    # File no longer exists, clean up queue entry
+                    self._database.mark_processing_completed(
+                        str(file_path), 
+                        success=False, 
+                        error_message="File no longer exists"
+                    )
+            
+            if recovered > 0:
+                logger.info(f"Recovered {recovered} items from previous session")
+                with self._stats_lock:
+                    self._total_queued += recovered
+            
+            return recovered
+            
+        except Exception as e:
+            logger.warning(f"Could not recover interrupted items: {e}")
+            return 0
     
     def stop(self) -> None:
         """Stop watching and cleanup."""
@@ -443,6 +495,11 @@ class DocumentWatcher:
                 # Double-check file still exists
                 if not file_path.exists():
                     logger.debug(f"File no longer exists: {file_path}")
+                    if self._database:
+                        self._database.mark_processing_completed(
+                            str(file_path), success=False, 
+                            error_message="File no longer exists"
+                        )
                     self._increment_processed()
                     continue
                 
@@ -460,12 +517,21 @@ class DocumentWatcher:
                         time.sleep(self.RETRY_DELAY)
                     else:
                         logger.error(f"File still locked after {self.MAX_RETRY_ATTEMPTS} retries: {file_path.name}")
+                        if self._database:
+                            self._database.mark_processing_completed(
+                                str(file_path), success=False,
+                                error_message=f"File locked after {self.MAX_RETRY_ATTEMPTS} retries"
+                            )
                         self._increment_failed()
                     continue
                 
                 # Update current file for progress tracking
                 with self._stats_lock:
                     self._current_file = file_path.name
+                
+                # Mark as processing in database (for crash recovery)
+                if self._database:
+                    self._database.mark_processing_started(str(file_path))
                 
                 # Log progress
                 progress = self._get_progress_string()
@@ -486,10 +552,18 @@ class DocumentWatcher:
                     else:
                         self._last_timeout = False
                     
+                    # Mark completed successfully in database
+                    if self._database:
+                        self._database.mark_processing_completed(str(file_path), success=True)
+                    
                     self._increment_processed()
                     
                 except Exception as e:
                     logger.error(f"Error processing {file_path.name}: {e}", exc_info=True)
+                    if self._database:
+                        self._database.mark_processing_completed(
+                            str(file_path), success=False, error_message=str(e)
+                        )
                     self._increment_failed()
                 
                 # Clear current file
@@ -545,7 +619,13 @@ class DocumentWatcher:
                 if not is_supported_extension(item_path, supported_extensions):
                     continue
                 
+                # Queue to in-memory queue
                 self.file_queue.put(item_path)
+                
+                # Also persist to database for crash recovery
+                if self._database:
+                    self._database.queue_file_for_processing(str(item_path))
+                
                 count += 1
                 logger.debug(f"Queued existing file: {item_path.name}")
             elif item_path.is_dir() and item_path.parent == self.watch_path:

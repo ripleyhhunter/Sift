@@ -70,6 +70,11 @@ class DocumentProcessor:
         self._poppler_available = self._check_poppler()
         self._libreoffice_available = self._check_libreoffice()
         self._text_extractors_available = self._check_text_extractors()
+        self._tesseract_available = self._check_tesseract()
+        
+        # OCR settings
+        self._ocr_enabled = config.processing.ocr_enabled if hasattr(config.processing, 'ocr_enabled') else True
+        self._ocr_min_text_threshold = 50  # If less than N chars extracted, try OCR
     
     def _check_text_extractors(self) -> dict:
         """Check which text extraction libraries are available."""
@@ -126,9 +131,37 @@ class DocumentProcessor:
                 self._soffice_path = soffice_path
                 logger.debug(f"Found LibreOffice at: {soffice_path}")
                 return True
+            logger.debug("LibreOffice not found in standard locations")
             return False
-        except Exception:
+        except (OSError, PermissionError) as e:
+            logger.debug(f"Error checking for LibreOffice: {e}")
             return False
+    
+    def _check_tesseract(self) -> bool:
+        """Check if Tesseract OCR is available."""
+        try:
+            result = subprocess.run(
+                ['tesseract', '--version'],
+                capture_output=True,
+                text=True,
+                **get_subprocess_flags()
+            )
+            if result.returncode == 0:
+                version = result.stdout.split('\n')[0] if result.stdout else 'unknown'
+                logger.debug(f"Tesseract OCR available: {version}")
+                return True
+            return False
+        except FileNotFoundError:
+            logger.debug("Tesseract OCR not found - OCR extraction unavailable")
+            return False
+        except Exception as e:
+            logger.debug(f"Error checking Tesseract: {e}")
+            return False
+    
+    @property
+    def ocr_available(self) -> bool:
+        """Check if OCR capability is available."""
+        return self._tesseract_available and self._ocr_enabled
     
     def can_extract_text(self, file_path: Path) -> bool:
         """
@@ -200,7 +233,12 @@ class DocumentProcessor:
             return None
     
     def _extract_pdf_text(self, file_path: Path) -> Optional[str]:
-        """Extract text from PDF using pypdf."""
+        """
+        Extract text from PDF using pypdf, with OCR fallback for scanned documents.
+        
+        If the PDF appears to be scanned (minimal extractable text), falls back
+        to OCR using Tesseract if available.
+        """
         try:
             import pypdf
             
@@ -215,10 +253,122 @@ class DocumentProcessor:
                     if page_text:
                         text_parts.append(f"--- Page {i+1} ---\n{page_text}")
             
-            return "\n\n".join(text_parts) if text_parts else None
+            combined_text = "\n\n".join(text_parts) if text_parts else ""
+            
+            # Check if this appears to be a scanned PDF (very little text extracted)
+            clean_text = combined_text.replace(" ", "").replace("\n", "")
+            if len(clean_text) < self._ocr_min_text_threshold:
+                logger.debug(f"PDF has minimal text ({len(clean_text)} chars), attempting OCR")
+                ocr_text = self._extract_pdf_ocr(file_path)
+                if ocr_text and len(ocr_text) > len(combined_text):
+                    logger.info(f"OCR extracted {len(ocr_text)} chars from scanned PDF")
+                    return ocr_text
+            
+            return combined_text if combined_text else None
             
         except Exception as e:
             logger.debug(f"PDF text extraction error: {e}")
+            # Try OCR as last resort
+            if self.ocr_available:
+                return self._extract_pdf_ocr(file_path)
+            return None
+    
+    def _extract_pdf_ocr(self, file_path: Path) -> Optional[str]:
+        """
+        Extract text from a PDF using OCR (for scanned documents).
+        
+        Converts PDF pages to images, then runs Tesseract on each.
+        """
+        if not self.ocr_available:
+            return None
+        
+        if not self._poppler_available:
+            logger.debug("PDF OCR requires Poppler for image conversion")
+            return None
+        
+        try:
+            from pdf2image import convert_from_path
+            
+            # Convert PDF pages to images
+            images = convert_from_path(
+                file_path,
+                first_page=1,
+                last_page=min(self.max_pages, 3),  # Limit pages for OCR (expensive)
+                dpi=150  # Lower DPI for OCR (faster, still readable)
+            )
+            
+            text_parts = []
+            for i, image in enumerate(images):
+                page_text = self._ocr_image(image)
+                if page_text:
+                    text_parts.append(f"--- Page {i+1} (OCR) ---\n{page_text}")
+            
+            return "\n\n".join(text_parts) if text_parts else None
+            
+        except Exception as e:
+            logger.debug(f"PDF OCR extraction error: {e}")
+            return None
+    
+    def _ocr_image(self, image) -> Optional[str]:
+        """
+        Run OCR on a PIL Image using Tesseract.
+        
+        Args:
+            image: PIL Image object
+            
+        Returns:
+            Extracted text or None
+        """
+        if not self._tesseract_available:
+            return None
+        
+        try:
+            import pytesseract
+            
+            # Run OCR with English language
+            text = pytesseract.image_to_string(
+                image,
+                lang='eng',
+                config='--psm 1'  # Automatic page segmentation with OSD
+            )
+            
+            return text.strip() if text else None
+            
+        except ImportError:
+            # pytesseract not installed, try direct subprocess
+            return self._ocr_image_subprocess(image)
+        except Exception as e:
+            logger.debug(f"OCR error: {e}")
+            return None
+    
+    def _ocr_image_subprocess(self, image) -> Optional[str]:
+        """Run OCR using tesseract subprocess directly."""
+        try:
+            # Save image to temp file
+            temp_path = self.temp_path / f"ocr_temp_{os.getpid()}.png"
+            image.save(str(temp_path), 'PNG')
+            
+            try:
+                # Run tesseract
+                result = subprocess.run(
+                    ['tesseract', str(temp_path), 'stdout', '-l', 'eng'],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    **get_subprocess_flags()
+                )
+                
+                if result.returncode == 0:
+                    return result.stdout.strip()
+                return None
+                
+            finally:
+                # Clean up temp file
+                if temp_path.exists():
+                    temp_path.unlink()
+                    
+        except Exception as e:
+            logger.debug(f"Subprocess OCR error: {e}")
             return None
     
     def _extract_docx_text(self, file_path: Path) -> Optional[str]:
@@ -508,6 +658,7 @@ class DocumentProcessor:
             )
             
             if result.returncode != 0:
+                logger.debug(f"LibreOffice conversion failed: {result.stderr}")
                 return None
             
             pdf_path = output_dir / (input_path.stem + '.pdf')
@@ -517,7 +668,11 @@ class DocumentProcessor:
             pdfs = list(output_dir.glob('*.pdf'))
             return pdfs[0] if pdfs else None
             
-        except Exception:
+        except subprocess.TimeoutExpired:
+            logger.warning(f"LibreOffice conversion timed out for {input_path.name}")
+            return None
+        except (OSError, subprocess.SubprocessError) as e:
+            logger.debug(f"LibreOffice conversion error: {e}")
             return None
     
     def _optimize_image(self, image: Image.Image) -> Image.Image:
@@ -552,10 +707,13 @@ class DocumentProcessor:
                             item.unlink()
                         elif item.is_dir():
                             shutil.rmtree(item)
-                    except Exception:
-                        pass
-        except Exception:
-            pass
+                    except PermissionError:
+                        # File may still be in use, will be cleaned up next time
+                        logger.debug(f"Could not remove temp file (in use): {item}")
+                    except OSError as e:
+                        logger.debug(f"Could not remove temp item {item}: {e}")
+        except OSError as e:
+            logger.debug(f"Could not access temp directory: {e}")
     
     def get_capabilities(self) -> dict:
         """Get information about processing capabilities."""
