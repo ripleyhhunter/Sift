@@ -149,6 +149,9 @@ class Sift:
         
         # Start dashboard if enabled
         if self.dashboard:
+            # Clean up any zombie processes on the dashboard port
+            self._cleanup_port(self.config.dashboard.port)
+            
             self.dashboard.set_status(running=True, lmstudio=lmstudio_ok)
             self.dashboard.start(open_browser=self.config.dashboard.auto_open_browser)
             logger.info(f"Dashboard available at: http://localhost:{self.config.dashboard.port}")
@@ -341,6 +344,87 @@ class Sift:
             f"  4. The URL is correct: {self.config.llm.base_url}"
         )
         return False
+    
+    def _cleanup_port(self, port: int) -> None:
+        """
+        Kill any existing processes using the specified port.
+        
+        This prevents zombie Flask processes from blocking startup.
+        Works on Windows, macOS, and Linux.
+        
+        Args:
+            port: Port number to clean up
+        """
+        import subprocess
+        import os
+        from .platform_utils import IS_WINDOWS, get_subprocess_flags
+        
+        try:
+            if IS_WINDOWS:
+                # Find processes using the port
+                result = subprocess.run(
+                    ['netstat', '-ano'],
+                    capture_output=True, text=True,
+                    **get_subprocess_flags()
+                )
+                
+                pids_to_kill = set()
+                for line in result.stdout.split('\n'):
+                    if f':{port}' in line and 'LISTENING' in line:
+                        parts = line.split()
+                        if parts:
+                            try:
+                                pid = int(parts[-1])
+                                # Don't kill the current process
+                                if pid != os.getpid() and pid != 0:
+                                    pids_to_kill.add(pid)
+                            except ValueError:
+                                pass
+                
+                # Kill the processes
+                for pid in pids_to_kill:
+                    try:
+                        subprocess.run(
+                            ['taskkill', '/F', '/PID', str(pid)],
+                            capture_output=True,
+                            **get_subprocess_flags()
+                        )
+                        logger.debug(f"Killed zombie process {pid} on port {port}")
+                    except Exception:
+                        pass
+                
+                if pids_to_kill:
+                    logger.info(f"Cleaned up {len(pids_to_kill)} zombie process(es) on port {port}")
+                    time.sleep(1)  # Give OS time to release the port
+                    
+            else:  # macOS / Linux
+                # Use lsof to find processes
+                result = subprocess.run(
+                    ['lsof', '-i', f':{port}', '-t'],
+                    capture_output=True, text=True
+                )
+                
+                pids = [p.strip() for p in result.stdout.split('\n') if p.strip()]
+                killed = 0
+                
+                for pid in pids:
+                    try:
+                        pid_int = int(pid)
+                        if pid_int != os.getpid():
+                            os.kill(pid_int, signal.SIGTERM)
+                            killed += 1
+                    except (ValueError, ProcessLookupError, PermissionError):
+                        pass
+                
+                if killed > 0:
+                    logger.info(f"Cleaned up {killed} zombie process(es) on port {port}")
+                    time.sleep(1)
+                    
+        except FileNotFoundError:
+            # netstat/lsof not available, skip cleanup
+            pass
+        except Exception as e:
+            logger.debug(f"Port cleanup failed (non-critical): {e}")
     
     def process_single(self, file_path: Path) -> bool:
         """
