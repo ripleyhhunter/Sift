@@ -7,12 +7,9 @@ on:
       - 'v*'
   pull_request:
     branches: [ main, master ]
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:
 
 jobs:
-  # ============================================================
-  # Build for Windows
-  # ============================================================
   build-windows:
     runs-on: windows-latest
     
@@ -32,48 +29,27 @@ jobs:
         pip install pyinstaller
     
     - name: Build executable
+      shell: pwsh
       run: |
-        pyinstaller --name SmartFolder `
-          --onedir `
-          --console `
-          --hidden-import watchdog.observers `
-          --hidden-import watchdog.events `
-          --hidden-import rapidfuzz `
-          --hidden-import yaml `
-          --hidden-import pypdf `
-          --hidden-import openpyxl `
-          --hidden-import pystray `
-          src/main.py
+        pyinstaller --name SmartFolder --onedir --console --hidden-import watchdog.observers --hidden-import watchdog.events --hidden-import rapidfuzz --hidden-import yaml --hidden-import pypdf --hidden-import openpyxl --hidden-import pystray src/main.py
     
     - name: Package distribution
+      shell: pwsh
       run: |
-        # Create package directory
         New-Item -ItemType Directory -Force -Path dist\SmartFolder_Package\SmartFolder
-        
-        # Copy built files
         Copy-Item -Recurse dist\SmartFolder\* dist\SmartFolder_Package\SmartFolder\
-        
-        # Copy config
         New-Item -ItemType Directory -Force -Path dist\SmartFolder_Package\SmartFolder\config
         Copy-Item config\settings.default.yaml dist\SmartFolder_Package\SmartFolder\config\
         Copy-Item config\settings.default.yaml dist\SmartFolder_Package\SmartFolder\config\settings.yaml
-        
-        # Create empty directories
         New-Item -ItemType Directory -Force -Path dist\SmartFolder_Package\SmartFolder\logs
         New-Item -ItemType Directory -Force -Path dist\SmartFolder_Package\SmartFolder\temp
         New-Item -ItemType Directory -Force -Path dist\SmartFolder_Package\SmartFolder\data
-        
-        # Copy docs
         Copy-Item README.md dist\SmartFolder_Package\
-        Copy-Item SETUP_INSTRUCTIONS.md dist\SmartFolder_Package\ -ErrorAction SilentlyContinue
-        
-        # Create run script
-        Set-Content -Path dist\SmartFolder_Package\run_smartfolder.bat -Value '@echo off
-cd /d "%~dp0SmartFolder"
-SmartFolder.exe %*
-pause'
+        if (Test-Path SETUP_INSTRUCTIONS.md) { Copy-Item SETUP_INSTRUCTIONS.md dist\SmartFolder_Package\ }
+        '@echo off`r`ncd /d "%~dp0SmartFolder"`r`nSmartFolder.exe %*`r`npause' | Out-File -FilePath dist\SmartFolder_Package\run_smartfolder.bat -Encoding ascii
     
     - name: Create ZIP archive
+      shell: pwsh
       run: |
         Compress-Archive -Path dist\SmartFolder_Package\* -DestinationPath dist\SmartFolder_Windows.zip
     
@@ -83,9 +59,6 @@ pause'
         name: SmartFolder-Windows
         path: dist/SmartFolder_Windows.zip
 
-  # ============================================================
-  # Build for macOS
-  # ============================================================
   build-macos:
     runs-on: macos-latest
     
@@ -110,70 +83,34 @@ pause'
     
     - name: Build executable
       run: |
-        pyinstaller --name SmartFolder \
-          --onedir \
-          --console \
-          --hidden-import watchdog.observers \
-          --hidden-import watchdog.events \
-          --hidden-import rapidfuzz \
-          --hidden-import yaml \
-          --hidden-import pypdf \
-          --hidden-import openpyxl \
-          --hidden-import pystray \
-          --hidden-import pync \
-          src/main.py
+        pyinstaller --name SmartFolder --onedir --console --hidden-import watchdog.observers --hidden-import watchdog.events --hidden-import rapidfuzz --hidden-import yaml --hidden-import pypdf --hidden-import openpyxl --hidden-import pystray --hidden-import pync src/main.py
     
     - name: Package distribution
       run: |
-        # Create package directory
         mkdir -p dist/SmartFolder_Package/SmartFolder
-        
-        # Copy built files
         cp -R dist/SmartFolder/* dist/SmartFolder_Package/SmartFolder/
-        
-        # Copy config
         mkdir -p dist/SmartFolder_Package/SmartFolder/config
         cp config/settings.default.yaml dist/SmartFolder_Package/SmartFolder/config/
         cp config/settings.macos.yaml dist/SmartFolder_Package/SmartFolder/config/
-        
-        # Create settings.yaml from macos template
-        sed "s/{username}/$USER/g" config/settings.macos.yaml > dist/SmartFolder_Package/SmartFolder/config/settings.yaml
-        
-        # Create empty directories
+        sed "s/{username}/\$USER/g" config/settings.macos.yaml > dist/SmartFolder_Package/SmartFolder/config/settings.yaml
         mkdir -p dist/SmartFolder_Package/SmartFolder/logs
         mkdir -p dist/SmartFolder_Package/SmartFolder/temp
         mkdir -p dist/SmartFolder_Package/SmartFolder/data
-        
-        # Copy docs
         cp README.md dist/SmartFolder_Package/
         cp SETUP_INSTRUCTIONS_MACOS.md dist/SmartFolder_Package/ || true
-        
-        # Create run script
-        cat > dist/SmartFolder_Package/run_smartfolder.sh << 'EOF'
-        #!/bin/bash
-        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-        cd "$SCRIPT_DIR/SmartFolder"
-        ./SmartFolder "$@"
-        EOF
+        echo '#!/bin/bash' > dist/SmartFolder_Package/run_smartfolder.sh
+        echo 'SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"' >> dist/SmartFolder_Package/run_smartfolder.sh
+        echo 'cd "$SCRIPT_DIR/SmartFolder"' >> dist/SmartFolder_Package/run_smartfolder.sh
+        echo './SmartFolder "$@"' >> dist/SmartFolder_Package/run_smartfolder.sh
         chmod +x dist/SmartFolder_Package/run_smartfolder.sh
-        
-        # Create install script for dependencies
-        cat > dist/SmartFolder_Package/install_dependencies.sh << 'EOF'
-        #!/bin/bash
-        echo "Installing dependencies for SmartFolder..."
-        
-        # Check for Homebrew
-        if ! command -v brew &> /dev/null; then
-            echo "Installing Homebrew..."
-            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-        fi
-        
-        # Install Poppler and libmagic
-        echo "Installing Poppler (for PDF support)..."
-        brew install poppler
-        
-        echo "Done! You can now run ./run_smartfolder.sh"
-        EOF
+        echo '#!/bin/bash' > dist/SmartFolder_Package/install_dependencies.sh
+        echo 'echo "Installing dependencies for SmartFolder..."' >> dist/SmartFolder_Package/install_dependencies.sh
+        echo 'if ! command -v brew &> /dev/null; then' >> dist/SmartFolder_Package/install_dependencies.sh
+        echo '    echo "Please install Homebrew first: https://brew.sh"' >> dist/SmartFolder_Package/install_dependencies.sh
+        echo '    exit 1' >> dist/SmartFolder_Package/install_dependencies.sh
+        echo 'fi' >> dist/SmartFolder_Package/install_dependencies.sh
+        echo 'brew install poppler' >> dist/SmartFolder_Package/install_dependencies.sh
+        echo 'echo "Done! You can now run ./run_smartfolder.sh"' >> dist/SmartFolder_Package/install_dependencies.sh
         chmod +x dist/SmartFolder_Package/install_dependencies.sh
     
     - name: Create ZIP archive
@@ -186,9 +123,6 @@ pause'
         name: SmartFolder-macOS
         path: dist/SmartFolder_macOS.zip
 
-  # ============================================================
-  # Build Source Distribution (cross-platform)
-  # ============================================================
   build-source:
     runs-on: ubuntu-latest
     
@@ -199,28 +133,16 @@ pause'
     - name: Create source distribution
       run: |
         mkdir -p dist/SmartFolder_Source
-        
-        # Copy source files
         cp -r src dist/SmartFolder_Source/
         cp -r config dist/SmartFolder_Source/
-        
-        # Copy requirements
         cp requirements.txt dist/SmartFolder_Source/
         cp requirements-macos.txt dist/SmartFolder_Source/ || true
-        
-        # Copy scripts
         cp setup_macos.sh dist/SmartFolder_Source/ || true
-        
-        # Copy docs
         cp README.md dist/SmartFolder_Source/
         cp SETUP_INSTRUCTIONS_MACOS.md dist/SmartFolder_Source/ || true
-        
-        # Create empty directories
         mkdir -p dist/SmartFolder_Source/logs
         mkdir -p dist/SmartFolder_Source/temp
         mkdir -p dist/SmartFolder_Source/data
-        
-        # Create ZIP
         cd dist && zip -r SmartFolder_Source.zip SmartFolder_Source
     
     - name: Upload source artifact
@@ -229,9 +151,6 @@ pause'
         name: SmartFolder-Source
         path: dist/SmartFolder_Source.zip
 
-  # ============================================================
-  # Create Release (on tag push)
-  # ============================================================
   release:
     needs: [build-windows, build-macos, build-source]
     runs-on: ubuntu-latest
@@ -256,4 +175,3 @@ pause'
         generate_release_notes: true
         draft: false
         prerelease: false
-
