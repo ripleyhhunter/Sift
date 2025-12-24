@@ -1482,13 +1482,23 @@ class DashboardServer:
         
         @app.route('/api/reassign', methods=['POST'])
         def api_reassign():
+            from .utils import sanitize_folder_name
+            
             data = request.get_json()
             doc_id = data.get('doc_id')
-            category = data.get('category')
+            category = data.get('category', '')
             subcategory = data.get('subcategory', '')
             
             if not doc_id or not category:
                 return jsonify({'success': False, 'error': 'Missing parameters'})
+            
+            # Security: Sanitize folder names to prevent path traversal
+            category = sanitize_folder_name(category)
+            subcategory = sanitize_folder_name(subcategory) if subcategory else ''
+            
+            # Security: Block obvious path traversal attempts
+            if '..' in category or '..' in subcategory:
+                return jsonify({'success': False, 'error': 'Invalid folder name'})
             
             # Get the document
             doc = self.database.get_document_by_id(doc_id)
@@ -1500,9 +1510,17 @@ class DashboardServer:
             if not current_path.exists():
                 return jsonify({'success': False, 'error': 'File not found on disk'})
             
+            # Security: Verify new path is within base folder
             new_folder = self.config.folders.base_path / category
             if subcategory:
                 new_folder = new_folder / subcategory
+            
+            # Resolve and verify path is within bounds
+            base_resolved = self.config.folders.base_path.resolve()
+            new_folder_resolved = new_folder.resolve()
+            if not str(new_folder_resolved).startswith(str(base_resolved)):
+                return jsonify({'success': False, 'error': 'Access denied: path outside Sift folder'})
+            
             new_folder.mkdir(parents=True, exist_ok=True)
             
             new_path = new_folder / current_path.name
@@ -1601,15 +1619,37 @@ class DashboardServer:
         @app.route('/api/open-folder', methods=['POST'])
         def api_open_folder():
             import subprocess
+            import sys
             data = request.get_json()
             path = data.get('path', '')
             
             if not path:
                 return jsonify({'success': False, 'error': 'No path provided'})
             
+            # Security: Validate path exists and is within allowed directories
+            from pathlib import Path as PathLib
             try:
-                # Open Windows Explorer with file selected
-                subprocess.Popen(f'explorer /select,"{path}"', shell=True)
+                resolved_path = PathLib(path).resolve()
+                # Only allow paths within the Sift base folder
+                base_resolved = self.config.folders.base_path.resolve()
+                if not str(resolved_path).startswith(str(base_resolved)):
+                    return jsonify({'success': False, 'error': 'Access denied: path outside Sift folder'})
+                if not resolved_path.exists():
+                    return jsonify({'success': False, 'error': 'File not found'})
+            except Exception:
+                return jsonify({'success': False, 'error': 'Invalid path'})
+            
+            try:
+                # Open file explorer - use array form to avoid shell injection
+                if sys.platform == 'win32':
+                    # Windows: use explorer with /select
+                    subprocess.run(['explorer', '/select,', str(resolved_path)], check=False)
+                elif sys.platform == 'darwin':
+                    # macOS: use open -R to reveal in Finder
+                    subprocess.run(['open', '-R', str(resolved_path)], check=True)
+                else:
+                    # Linux: open containing folder
+                    subprocess.run(['xdg-open', str(resolved_path.parent)], check=True)
                 return jsonify({'success': True})
             except Exception as e:
                 logger.error(f"Failed to open folder: {e}")

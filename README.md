@@ -354,10 +354,35 @@ Sift/
 
 ## Security & Privacy
 
-- **100% Local Processing** - Documents never leave your computer
-- **No Cloud Services** - Everything runs locally via LMStudio
-- **No Telemetry** - The application doesn't collect or send any data
-- **Open Source** - Review the code yourself
+Sift is designed with privacy as a core principle. Your documents **never leave your computer**.
+
+### How Data Stays Local
+
+| Component | What It Connects To | Notes |
+|-----------|---------------------|-------|
+| **AI Classification** | `localhost:1234` (LMStudio) | LMStudio runs 100% locally on your machine |
+| **Web Dashboard** | `127.0.0.1:5000` (localhost only) | Not accessible from other devices on your network |
+| **Database** | Local SQLite file (`data/documents.db`) | No external database connections |
+| **File Operations** | Your local filesystem only | Files are moved within your `Sift` folder |
+
+### Security Guarantees
+
+- **No Internet Required** - Sift works completely offline (after initial setup)
+- **No Cloud Services** - No AWS, Google Cloud, OpenAI, or any external APIs
+- **No Telemetry** - Zero analytics, tracking, or usage data collection
+- **No Phone Home** - The application makes no outbound network connections
+- **Dashboard is Local Only** - Binds to `127.0.0.1`, not `0.0.0.0`—inaccessible from other devices
+- **Path Validation** - All file operations are validated to stay within your Sift folder
+- **Open Source** - Review the code yourself to verify these claims
+
+### What About LMStudio?
+
+LMStudio is a separate application that runs AI models locally on your computer:
+- Models are downloaded once and run entirely on your hardware
+- No API keys or cloud accounts required
+- Your document content is processed locally and never uploaded anywhere
+
+> **Note:** While LMStudio downloads models from the internet during initial setup, once downloaded, all AI processing happens locally with no network activity.
 
 ---
 
