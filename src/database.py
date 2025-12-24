@@ -247,8 +247,11 @@ class DocumentDatabase:
     @contextmanager
     def _get_connection(self):
         """Get a database connection with context management."""
-        conn = sqlite3.connect(str(self.db_path))
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
         try:
+            # Enable WAL mode for better concurrent access
+            conn.execute('PRAGMA journal_mode=WAL')
+            conn.execute('PRAGMA busy_timeout=30000')  # 30 second timeout
             yield conn
         finally:
             conn.close()
