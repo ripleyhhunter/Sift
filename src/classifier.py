@@ -157,11 +157,11 @@ class DocumentClassifier:
                 'reasoning': 'Classified by filename keywords (LLM fallback)',
                 'suggested_filename': file_path.stem
             })
-        elif any(kw in filename for kw in ['medical', 'health', 'doctor', 'hospital', 'eob', 'claim']):
+        elif any(kw in filename for kw in ['medical', 'doctor', 'hospital', 'eob', 'claim', 'medstar', 'lab', 'results', 'prescription', 'rx', 'diagnosis', 'bloodwork', 'vaccine', 'immunization']):
             return ClassificationResult.from_dict({
                 'document_type': 'Medical Document',
                 'primary_category': 'Medical',
-                'subcategory': 'Insurance',
+                'subcategory': 'Records',
                 'confidence': 0.75,
                 'reasoning': 'Classified by filename keywords (LLM fallback)',
                 'suggested_filename': file_path.stem
@@ -184,7 +184,7 @@ class DocumentClassifier:
                 'reasoning': 'Classified by filename keywords (LLM fallback)',
                 'suggested_filename': file_path.stem
             })
-        elif any(kw in filename for kw in ['insurance', 'policy', 'coverage']):
+        elif any(kw in filename for kw in ['insurance', 'policy', 'coverage', 'appraisal', 'valuation']):
             return ClassificationResult.from_dict({
                 'document_type': 'Insurance Document',
                 'primary_category': 'Insurance',

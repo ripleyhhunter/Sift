@@ -25,7 +25,7 @@ llm:
   # API key (not actually used by LMStudio, but required for compatibility)
   api_key: "lm-studio"
   # Timeout for LLM requests (in seconds) - increase for complex documents
-  timeout_seconds: 180
+  timeout_seconds: 90
   # Maximum tokens in the response
   max_tokens: 1024
   # Temperature for classification (lower = more consistent)

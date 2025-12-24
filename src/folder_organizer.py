@@ -280,8 +280,20 @@ class FolderOrganizer:
         # Assess original filename quality
         original_is_useful = self._is_filename_useful(original_stem)
         
+        # Check if LLM suggestion is more descriptive than original
+        llm_suggestion_better = (
+            suggested_name and 
+            len(suggested_name) > 3 and 
+            suggested_name.lower() != original_stem.lower() and
+            len(suggested_name) > len(original_stem)  # LLM suggested something more descriptive
+        )
+        
         # Decide which name to use
-        if self.preserve_filename and original_is_useful:
+        if llm_suggestion_better:
+            # LLM provided a more descriptive name - use it
+            base_name = suggested_name
+            logger.info(f"Using LLM suggested filename: {original_stem} -> {suggested_name}")
+        elif self.preserve_filename and original_is_useful:
             # Keep original if it's useful and user wants to preserve
             base_name = original_stem
             logger.debug(f"Keeping original filename: {original_stem}")

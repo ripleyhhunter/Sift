@@ -33,42 +33,31 @@ logger = logging.getLogger(__name__)
 # Model size adaptations only affect verbosity, not the structure.
 # ============================================================================
 
-# Base system prompt - used for all model sizes
+# Base system prompt - used for moderate/detailed modes
 # Defines the role, workflow, and output format
-SYSTEM_PROMPT_BASE = """You are Sift, an intelligent document classification assistant. Your task is to analyze documents and classify them into the appropriate folder within the user's organized file system.
+# NOTE: The actual folder structure is provided DYNAMICALLY in each user prompt
+SYSTEM_PROMPT_BASE = """You are Sift, an intelligent document classification assistant. Your task is to analyze documents and classify them into the user's folder structure.
 
 ## YOUR WORKFLOW
 
 1. **READ** the document metadata (filename, type, size)
-2. **EXAMINE** the existing folder structure to understand what categories exist
+2. **EXAMINE** the existing folder structure provided below - this shows EXACTLY what folders exist
 3. **ANALYZE** the document content to understand what it is
-4. **CLASSIFY** into the most appropriate existing folder, or suggest a new one
-5. **RESPOND** with a structured JSON classification
+4. **CLASSIFY** into the most appropriate EXISTING folder, or create a new one only if needed
+5. **RESPOND** with structured JSON
 
 ## CLASSIFICATION PRINCIPLES
 
-**ALWAYS prefer existing folders** - The user has already organized their files. Use their existing folder structure when a document fits.
+**ALWAYS prefer existing folders** - The user's folder structure is provided in each request. Use it!
 
-**Create new folders sparingly** - Only create new categories/subcategories when no existing folder is appropriate.
+**Create new folders sparingly** - Only when no existing folder fits.
 
-**Match by PURPOSE, not keywords** - Classify based on what the document is FOR, not just words it contains:
-- An "insurance policy" goes to Insurance/, not Health_Fitness/
-- A "training plan for marathon" goes to Health_Fitness/, not Work/
-- A "wedding vendor contract" goes to Personal/Wedding/, not Legal/
-
-## CATEGORY GUIDELINES
-
-| Category | Use For | NOT For |
-|----------|---------|---------|
-| Insurance | Policies, claims, coverage docs | Health insurance claims (→ Medical) |
-| Financial | Tax, banking, invoices, bills | Insurance policies (→ Insurance) |
-| Medical | Doctor visits, prescriptions, health records | Gym memberships (→ Health_Fitness) |
-| Legal | Contracts, agreements, legal letters | Lease agreements may go to Home/ |
-| Work | Employment docs, HR, resumes, projects | Personal projects (→ Hobbies) |
-| Health_Fitness | Workout plans, gym, race registrations | Body measurements for clothing (→ Personal) |
-| Personal | Identity docs, personal records, lifestyle | Work-related personal info (→ Work) |
-| Home | Household, kitchen, maintenance | Recipes (→ Hobbies/Cooking) |
-| Hobbies | Crafts, collections, recreational | Electronics for work (→ Work) |
+**Match by PURPOSE, not keywords** - Classify based on what the document is FOR:
+- Insurance policies/claims → Insurance folder (NOT Health_Fitness)
+- Paystubs, tax forms, bank docs → Financial folder
+- Doctor visits, prescriptions → Medical folder
+- Workout plans, gym, races → Health_Fitness folder
+- But always CHECK the user's actual folders first!
 
 ## REQUIRED OUTPUT FORMAT
 
@@ -99,13 +88,22 @@ You MUST respond with valid JSON only. No additional text before or after.
 - `extracted_date`: Any date found in document (YYYY-MM-DD format) or null
 - `extracted_org`: Any organization/company name found or null"""
 
-# Ultra-compact version for small models (<2B) - minimal tokens, maximum clarity
-SYSTEM_PROMPT_COMPACT = """Classify documents into folders. Respond with JSON only.
+# Compact version for small models (<2B) - concise but complete
+# Small models work better with direct instructions, not verbose explanations
+# NOTE: No hardcoded categories - folder structure is provided dynamically per-document
+SYSTEM_PROMPT_COMPACT = """Classify the document into a folder. Reply with JSON only.
 
-Categories: Insurance, Financial, Medical, Legal, Work, Personal, Home, Hobbies, Health_Fitness, Travel, Receipts, Education, Government
+RULES:
+- Classify by document PURPOSE, not keyword matches
+- Read what the document IS ABOUT, not just words it contains
+- If your reasoning contradicts the content, RECONSIDER
+- Use EXISTING folders from the list provided
 
-Output format:
-{"category":"Folder","subcategory":"Sub","confidence":0.9,"document_type":"Type","summary":"Brief","reasoning":"Why"}"""
+JSON format:
+{"category":"FOLDER","subcategory":"SUBFOLDER","confidence":0.9,"document_type":"TYPE","summary":"SUMMARY","reasoning":"REASON","suggested_filename":"FILENAME"}
+
+Replace with actual values. Use "" for subcategory if none. 
+suggested_filename: If original filename is non-descriptive (like a person's name), suggest a better one describing the document."""
 
 # Map prompt styles to system prompts
 SYSTEM_PROMPTS = {
@@ -469,17 +467,33 @@ class LMStudioClient:
         Returns:
             Formatted user prompt
         """
-        # For small models, use ultra-compact format
+        # For small models, use compact format BUT include full folder structure
         if self.prompt_style == "simple":
-            # Minimal prompt for fast inference
-            folder_list = ", ".join(sorted(category_structure.keys())) if category_structure else ", ".join(sorted(existing_folders)) if existing_folders else "Financial, Insurance, Medical, Work, Personal"
-            return f"""File: {metadata.filename if metadata else filename}
-Folders: {folder_list}
+            # Build folder tree - include subfolders so model knows what exists
+            if category_structure:
+                folder_lines = []
+                for cat in sorted(category_structure.keys()):
+                    subs = category_structure[cat]
+                    if subs:
+                        folder_lines.append(f"{cat}/: {', '.join(sorted(subs))}")
+                    else:
+                        folder_lines.append(f"{cat}/")
+                folder_tree = "\n".join(folder_lines)
+            elif existing_folders:
+                folder_tree = "\n".join(f"{f}/" for f in sorted(existing_folders))
+            else:
+                folder_tree = "(no folders yet)"
+            
+            return f"""Document: {metadata.filename if metadata else filename}
+
+FOLDERS (use existing when possible):
+{folder_tree}
 
 Content:
 {content}
 
-Classify into folder. JSON only: /no_think"""
+TASK: What is this document ABOUT? Classify by its purpose.
+Reply with JSON only. /no_think"""
         
         # For moderate/detailed models, use full structured format
         sections = []
@@ -650,6 +664,11 @@ Respond with valid JSON only. No other text. /no_think"""
             # Strip Qwen3's <think>...</think> tags
             content = re.sub(r'<think>[\s\S]*?</think>', '', content).strip()
             
+            # Fix common JSON malformations from small models
+            # Pattern: "field":"value":"/" -> "field":"value"  (model confused folder paths)
+            # Example: {"category":"Government":"/","sub... -> {"category":"Government","sub...
+            content = re.sub(r'":"([^"]+)":"/",', r'":"\1",', content)
+            
             # Try to parse JSON from response
             data = None
             try:
@@ -690,6 +709,28 @@ Respond with valid JSON only. No other text. /no_think"""
                     data['extracted_info']['date'] = data['extracted_date']
                 if 'extracted_org' in data and data['extracted_org']:
                     data['extracted_info']['organization'] = data['extracted_org']
+            
+            # ============================================================
+            # CRITICAL: Detect when LLM copied placeholder values literally
+            # This happens when small models don't understand to replace them
+            # ============================================================
+            placeholder_values = {'folder', 'sub', 'type', 'brief', 'why', 'foldername', 'subfoldername', 
+                                  'documenttype', 'one sentence description', '<folder name>', '<subfolder or empty>',
+                                  'summary', 'reason', 'subfolder'}
+            category_val = str(data.get('category', data.get('primary_category', ''))).lower().strip()
+            doc_type_val = str(data.get('document_type', '')).lower().strip()
+            summary_val = str(data.get('summary', data.get('content_summary', ''))).lower().strip()
+            subcat_val = str(data.get('subcategory', '')).lower().strip()
+            
+            # Check for placeholder values in category, doc_type, or summary
+            if category_val in placeholder_values or doc_type_val in placeholder_values or summary_val in placeholder_values:
+                logger.warning(f"LLM copied placeholder values (category='{category_val}', doc_type='{doc_type_val}', summary='{summary_val}') - falling back to filename classification")
+                return ClassificationResult.create_fallback("LLM copied placeholder values - needs filename fallback")
+            
+            # Special check: "Empty" as subcategory is invalid - should be empty string
+            if subcat_val == 'empty':
+                logger.info("Correcting subcategory 'Empty' to empty string")
+                data['subcategory'] = ''
             
             # Validate and fill defaults
             if 'primary_category' not in data:
