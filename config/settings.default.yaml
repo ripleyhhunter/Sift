@@ -1,0 +1,185 @@
+# Smart Document Folder Configuration
+# ====================================
+# Edit this file to customize the behavior of the Smart Document Folder System.
+# Make sure to restart the application after making changes.
+
+# Folder Paths
+# -------------
+# Paths will be automatically configured during setup
+folders:
+  # Folder to watch for new documents (drop zone)
+  watch_path: "C:\\Users\\{username}\\Documents\\SmartFolder\\Inbox"
+  # Base folder where organized documents will be stored
+  base_path: "C:\\Users\\{username}\\Documents\\SmartFolder"
+  # Temporary folder for document processing
+  temp_path: "C:\\Users\\{username}\\Documents\\SmartFolder\\.temp"
+
+# LMStudio Configuration
+# ----------------------
+# Configure connection to LMStudio's local API server
+llm:
+  # LMStudio API endpoint (default port is 1234)
+  base_url: "http://localhost:1234/v1"
+  # Model identifier - must match what's loaded in LMStudio
+  model_identifier: "qwen/qwen3-4b"
+  # API key (not actually used by LMStudio, but required for compatibility)
+  api_key: "lm-studio"
+  # Timeout for LLM requests (in seconds) - increase for complex documents
+  timeout_seconds: 180
+  # Maximum tokens in the response
+  max_tokens: 1024
+  # Temperature for classification (lower = more consistent)
+  temperature: 0.1
+
+# Document Processing
+# -------------------
+processing:
+  # File types to process
+  supported_extensions:
+    - ".pdf"
+    - ".docx"
+    - ".doc"
+    - ".xlsx"
+    - ".xls"
+    - ".pptx"
+    - ".ppt"
+    - ".csv"
+    - ".tsv"
+    - ".png"
+    - ".jpg"
+    - ".jpeg"
+    - ".tiff"
+    - ".bmp"
+    - ".gif"
+  # Maximum pages to analyze per document (more pages = slower but more accurate)
+  max_pages_to_analyze: 3
+  # Image resolution for document conversion (DPI)
+  image_dpi: 150
+  # Maximum image dimension (pixels) - larger images are resized
+  max_image_dimension: 1024
+  # Delay before processing new files (seconds) - allows for file copy completion
+  processing_delay_seconds: 2
+
+# Category Definitions
+# --------------------
+# Define categories and subcategories for document organization.
+# Keywords help the AI understand what belongs in each category.
+categories:
+  - name: "Financial"
+    subcategories:
+      - "Tax_Documents"
+      - "Bank_Statements"
+      - "Invoices"
+      - "Investment"
+      - "Payroll"
+    keywords: ["tax", "W2", "1099", "bank", "statement", "invoice", "receipt", "payment"]
+
+  - name: "Medical"
+    subcategories:
+      - "Insurance"
+      - "Records"
+      - "Prescriptions"
+      - "Bills"
+    keywords: ["medical", "health", "doctor", "hospital", "prescription", "diagnosis"]
+
+  - name: "Legal"
+    subcategories:
+      - "Contracts"
+      - "Agreements"
+      - "Correspondence"
+      - "Court"
+    keywords: ["contract", "agreement", "legal", "attorney", "court", "lawsuit"]
+
+  - name: "Government"
+    subcategories:
+      - "ID_Documents"
+      - "Licenses"
+      - "Permits"
+      - "Correspondence"
+    keywords: ["government", "dmv", "passport", "social security", "license", "permit"]
+
+  - name: "Insurance"
+    subcategories:
+      - "Auto"
+      - "Home"
+      - "Life"
+      - "Claims"
+    keywords: ["insurance", "policy", "claim", "premium", "coverage"]
+
+  - name: "Work"
+    subcategories:
+      - "Reports"
+      - "Correspondence"
+      - "Projects"
+      - "HR"
+    keywords: ["work", "employment", "project", "report", "memo", "meeting"]
+
+  - name: "Education"
+    subcategories:
+      - "Transcripts"
+      - "Certificates"
+      - "Applications"
+    keywords: ["education", "school", "university", "degree", "transcript", "diploma"]
+
+  - name: "Personal"
+    subcategories:
+      - "Identity"
+      - "Certificates"
+      - "Correspondence"
+    keywords: ["personal", "birth", "marriage", "certificate"]
+
+  - name: "Receipts"
+    subcategories:
+      - "Shopping"
+      - "Services"
+      - "Utilities"
+    keywords: ["receipt", "purchase", "order", "confirmation"]
+
+  - name: "Miscellaneous"
+    subcategories: []
+    keywords: []  # Fallback category for unclassifiable documents
+
+# Behavior Settings
+# -----------------
+behavior:
+  # Create missing folders automatically
+  create_missing_folders: true
+  # Keep original filename (false = use suggested filename from AI)
+  preserve_original_filename: true
+  # Add date prefix to filenames (YYYY-MM-DD_filename)
+  add_date_prefix: false
+  # How to handle duplicate filenames: rename, skip, or overwrite
+  duplicate_handling: "rename"
+  # Move or copy files (move removes from inbox, copy keeps original)
+  move_or_copy: "move"
+  # Enable subcategory classification (if false, only uses main categories)
+  enable_subcategory_classification: true
+  # Minimum confidence score to auto-classify (0.0-1.0)
+  # Documents below this threshold go to the review folder
+  confidence_threshold: 0.7
+  # Folder name for low-confidence items requiring manual review
+  manual_review_folder: "Needs_Review"
+
+# Logging
+# -------
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR
+  level: "INFO"
+  # Log file path (relative to application directory)
+  log_file: "logs/smart_folder.log"
+  # Maximum log file size in MB before rotation
+  max_log_size_mb: 10
+  # Number of backup log files to keep
+  backup_count: 5
+
+# Advanced Settings
+# -----------------
+advanced:
+  # Number of retry attempts for failed operations
+  retry_attempts: 3
+  # Delay between retries (seconds)
+  retry_delay_seconds: 5
+  # Process files concurrently (false = one at a time, safer)
+  concurrent_processing: false
+  # Process existing files when the application starts
+  startup_scan: true

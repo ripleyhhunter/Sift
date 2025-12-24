@@ -1,0 +1,45 @@
+# Smart Document Folder System - Dependencies
+# Python 3.10+ required
+
+# File system monitoring
+watchdog>=3.0.0
+
+# HTTP client and OpenAI-compatible API
+requests>=2.28.0
+openai>=1.0.0
+
+# Image processing
+Pillow>=9.0.0
+
+# PDF to image conversion (requires Poppler)
+pdf2image>=1.16.0
+
+# Configuration management
+PyYAML>=6.0
+
+# Windows file type detection
+python-magic-bin>=0.4.14; sys_platform == 'win32'
+
+# Console colors for Windows
+colorama>=0.4.6
+
+# Fuzzy string matching for folder matching
+rapidfuzz>=3.0.0
+
+# PDF text extraction
+pypdf>=3.0.0
+
+# Excel file reading
+openpyxl>=3.0.0
+
+# Word document reading
+python-docx>=0.8.11
+
+# Web dashboard
+flask>=2.3.0
+
+# System tray icon (cross-platform)
+pystray>=0.19.0
+
+# Windows notifications
+winotify>=1.1.0; sys_platform == 'win32'

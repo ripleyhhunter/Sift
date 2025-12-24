@@ -1,0 +1,52 @@
+# Smart Document Folder System - macOS Dependencies
+# Python 3.10+ required
+# 
+# Prerequisites (install via Homebrew):
+#   brew install poppler libmagic
+#
+# Then install Python packages:
+#   pip install -r requirements-macos.txt
+
+# File system monitoring
+watchdog>=3.0.0
+
+# HTTP client and OpenAI-compatible API
+requests>=2.28.0
+openai>=1.0.0
+
+# Image processing
+Pillow>=9.0.0
+
+# PDF to image conversion (requires Poppler via Homebrew)
+pdf2image>=1.16.0
+
+# Configuration management
+PyYAML>=6.0
+
+# macOS file type detection (requires libmagic via Homebrew)
+python-magic>=0.4.27
+
+# Console colors
+colorama>=0.4.6
+
+# Fuzzy string matching for folder matching
+rapidfuzz>=3.0.0
+
+# PDF text extraction
+pypdf>=3.0.0
+
+# Excel file reading
+openpyxl>=3.0.0
+
+# Word document reading
+python-docx>=0.8.11
+
+# Web dashboard
+flask>=2.3.0
+
+# System tray icon (cross-platform)
+pystray>=0.19.0
+
+# macOS notifications (optional, for toast notifications)
+pync>=2.0.3
+

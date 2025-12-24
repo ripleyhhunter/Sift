@@ -1,0 +1,229 @@
+# Smart Document Folder Configuration - macOS
+# ============================================
+# Edit this file to customize the behavior of the Smart Document Folder System.
+# Make sure to restart the application after making changes.
+#
+# Before using, rename this file to settings.yaml
+
+# Folder Paths
+# -------------
+# {username} will be replaced with your macOS username
+folders:
+  # Folder to watch for new documents (drop zone)
+  watch_path: "/Users/{username}/Documents/SmartFolder/Inbox"
+  # Base folder where organized documents will be stored
+  base_path: "/Users/{username}/Documents/SmartFolder"
+  # Temporary folder for document processing
+  temp_path: "/Users/{username}/Documents/SmartFolder/.temp"
+
+# LMStudio Configuration
+# ----------------------
+# Configure connection to LMStudio's local API server
+llm:
+  # LMStudio API endpoint (default port is 1234)
+  base_url: "http://localhost:1234/v1"
+  # API key (not actually used by LMStudio, but required for compatibility)
+  api_key: "lm-studio"
+  
+  # ============================================================
+  # MODEL PROFILES - Easy switching between different models
+  # ============================================================
+  # Just change 'active_profile' to switch models and prompts!
+  # Options: "fast", "balanced", "accurate"
+  active_profile: "fast"
+  
+  # Profile definitions (customize or add your own)
+  profiles:
+    # FAST - Qwen3 1.7B with simple prompts (recommended for most users)
+    fast:
+      model_identifier: "qwen/qwen3-1.7b"
+      max_tokens: 512
+      timeout_seconds: 60
+      temperature: 0.1
+      prompt_style: "simple"
+      description: "Fastest classification - good for most documents"
+    
+    # BALANCED - Qwen3 4B with detailed prompts
+    balanced:
+      model_identifier: "qwen/qwen3-4b"
+      max_tokens: 2048
+      timeout_seconds: 180
+      temperature: 0.1
+      prompt_style: "detailed"
+      description: "Original setup - detailed prompts for best accuracy"
+    
+    # ACCURATE - Larger model with detailed prompts
+    accurate:
+      model_identifier: "qwen/qwen2.5-7b-instruct"
+      max_tokens: 2048
+      timeout_seconds: 180
+      temperature: 0.1
+      prompt_style: "detailed"
+      description: "Most accurate - for complex documents"
+
+# Document Processing
+# -------------------
+processing:
+  # File types to process
+  supported_extensions:
+    - ".pdf"
+    - ".docx"
+    - ".doc"
+    - ".xlsx"
+    - ".xls"
+    - ".pptx"
+    - ".ppt"
+    - ".csv"
+    - ".tsv"
+    - ".png"
+    - ".jpg"
+    - ".jpeg"
+    - ".tiff"
+    - ".bmp"
+    - ".gif"
+  max_pages_to_analyze: 3
+  image_dpi: 150
+  max_image_dimension: 1024
+  processing_delay_seconds: 2
+
+# Category Definitions (same as Windows version)
+categories:
+  - name: "Financial"
+    subcategories:
+      - "Tax_Documents"
+      - "Bank_Statements"
+      - "Invoices"
+      - "Investment"
+      - "Payroll"
+    keywords: ["tax", "W2", "1099", "bank", "statement", "invoice", "receipt", "payment"]
+
+  - name: "Medical"
+    subcategories:
+      - "Insurance"
+      - "Records"
+      - "Prescriptions"
+      - "Bills"
+    keywords: ["medical", "health", "doctor", "hospital", "prescription", "diagnosis"]
+
+  - name: "Legal"
+    subcategories:
+      - "Contracts"
+      - "Agreements"
+      - "Correspondence"
+      - "Court"
+    keywords: ["contract", "agreement", "legal", "attorney", "court", "lawsuit"]
+
+  - name: "Government"
+    subcategories:
+      - "ID_Documents"
+      - "Licenses"
+      - "Permits"
+      - "Correspondence"
+    keywords: ["government", "dmv", "passport", "social security", "license", "permit"]
+
+  - name: "Insurance"
+    subcategories:
+      - "Auto"
+      - "Home"
+      - "Life"
+      - "Claims"
+    keywords: ["insurance", "policy", "claim", "premium", "coverage"]
+
+  - name: "Work"
+    subcategories:
+      - "Reports"
+      - "Correspondence"
+      - "Projects"
+      - "HR"
+    keywords: ["work", "employment", "project", "report", "memo", "meeting"]
+
+  - name: "Education"
+    subcategories:
+      - "Transcripts"
+      - "Certificates"
+      - "Applications"
+    keywords: ["education", "school", "university", "degree", "transcript", "diploma"]
+
+  - name: "Personal"
+    subcategories:
+      - "Identity"
+      - "Certificates"
+      - "Correspondence"
+      - "Fashion"
+      - "Lifestyle"
+    keywords: ["personal", "birth", "marriage", "certificate", "wardrobe", "clothing"]
+
+  - name: "Home"
+    subcategories:
+      - "Kitchen"
+      - "Inventory"
+      - "Maintenance"
+      - "Furniture"
+      - "Appliances"
+      - "Recipes"
+    keywords: ["home", "kitchen", "inventory", "household", "furniture", "appliance", "recipe"]
+
+  - name: "Health_Fitness"
+    subcategories:
+      - "Exercise_Programs"
+      - "Race_Registrations"
+      - "Gym_Memberships"
+      - "Nutrition"
+    keywords: ["fitness", "exercise", "workout", "training program", "marathon", "running", "gym"]
+
+  - name: "Hobbies"
+    subcategories:
+      - "Sports"
+      - "Crafts"
+      - "Collections"
+    keywords: ["hobby", "craft", "collection", "recreation", "leisure"]
+
+  - name: "Travel"
+    subcategories:
+      - "Itineraries"
+      - "Bookings"
+      - "Confirmations"
+    keywords: ["travel", "flight", "hotel", "booking", "itinerary", "vacation", "trip"]
+
+  - name: "Receipts"
+    subcategories:
+      - "Shopping"
+      - "Services"
+      - "Utilities"
+    keywords: ["receipt", "purchase", "order", "confirmation"]
+
+  - name: "Miscellaneous"
+    subcategories: []
+    keywords: []
+
+# Behavior Settings
+behavior:
+  create_missing_folders: true
+  preserve_original_filename: true
+  add_date_prefix: false
+  duplicate_handling: "rename"
+  move_or_copy: "move"
+  enable_subcategory_classification: true
+  confidence_threshold: 0.7
+  manual_review_folder: "Needs_Review"
+
+# Logging
+logging:
+  level: "INFO"
+  log_file: "logs/smart_folder.log"
+  max_log_size_mb: 10
+  backup_count: 5
+
+# Dashboard Settings
+dashboard:
+  enabled: true
+  port: 5000
+  auto_open_browser: true
+
+# Advanced Settings
+advanced:
+  retry_attempts: 3
+  retry_delay_seconds: 5
+  concurrent_processing: false
+  startup_scan: true
+
