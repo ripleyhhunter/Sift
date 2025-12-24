@@ -384,47 +384,54 @@ class LMStudioClient:
         - simple: Minimal instructions for small models
         - moderate: Balanced for medium models
         - detailed: Full instructions for large models
+        
+        ALL styles now receive the full folder structure so the LLM can
+        see existing folders and subfolders, and create new ones if needed.
         """
-        # Build category list
-        if category_structure and self.prompt_style != "simple":
+        # Build category list - ALWAYS include full structure with subfolders
+        if category_structure:
             category_lines = []
-            for cat, subcats in category_structure.items():
+            for cat, subcats in sorted(category_structure.items()):
                 if subcats:
-                    subcat_str = ", ".join(subcats[:5])  # Limit subcats shown
-                    category_lines.append(f"- {cat}: [{subcat_str}]")
+                    subcat_str = ", ".join(sorted(subcats))  # Show ALL subcategories
+                    category_lines.append(f"- {cat}/: [{subcat_str}]")
                 else:
-                    category_lines.append(f"- {cat}")
-            category_info = "\n".join(category_lines)
+                    category_lines.append(f"- {cat}/")
+            category_info = "\n".join(category_lines) if category_lines else "No folders yet - create as needed"
+        elif existing_folders:
+            category_info = "\n".join(f"- {f}/" for f in sorted(existing_folders))
         else:
-            category_info = ", ".join(existing_folders) if existing_folders else "Financial, Medical, Legal, Work, Personal, Home, Miscellaneous"
+            category_info = "No folders yet - create as needed (e.g., Financial, Insurance, Medical, Legal, Work, Personal)"
         
         if self.prompt_style == "simple":
-            # Clear category matching
-            return f"""Classify this document.
+            # Simple prompt with full folder structure visibility
+            return f"""Classify this document into a folder.
 
 FILENAME: {filename}
 
-EXISTING FOLDERS:
+YOUR EXISTING FOLDER STRUCTURE:
 {category_info}
 
 CONTENT:
 {sampled_text}
 
-MATCH KEYWORDS TO CATEGORY:
-- Running/race/marathon/training plan for running → Health_Fitness
-- Wedding/bride/groom/first dance → Personal/Wedding
-- Electronics/Arduino/ESP32 → Hobbies/Electronics
-- Resume/CV → Work/Resumes
+INSTRUCTIONS:
+1. USE an existing folder/subfolder if it matches
+2. Or CREATE a new folder if nothing fits
+3. For insurance documents → Insurance/ folder
+4. For tax/bank/financial → Financial/
+5. For medical/health records → Medical/
+6. For fitness/exercise → Health_Fitness/
 
-What ACTIVITY is this document for? Respond with JSON: /no_think"""
+Respond with JSON: {{"category": "folder", "subcategory": "subfolder", "confidence": 0.9, "document_type": "type", "summary": "brief", "reasoning": "why"}} /no_think"""
         
         elif self.prompt_style == "moderate":
-            # Clear category matching
-            return f"""Classify this document by its PURPOSE.
+            # Moderate prompt with clear folder structure
+            return f"""Classify this document into an appropriate folder.
 
 FILENAME: {filename}
 
-EXISTING FOLDERS:
+YOUR EXISTING FOLDER STRUCTURE:
 {category_info}
 
 CONTENT:
@@ -432,31 +439,36 @@ CONTENT:
 {sampled_text}
 ---
 
-IMPORTANT: Match the ACTIVITY type:
-- Running/training/race/marathon → Health_Fitness (even if it's an "event")
-- Wedding/ceremony/reception → Personal/Wedding
-- Electronics hobby → Hobbies
-- Job/career → Work
+RULES:
+1. PREFER existing folders/subfolders when they match
+2. CREATE new folders only if nothing fits
+3. Insurance/policy/coverage → Insurance/ (NOT Health_Fitness!)
+4. Tax/bank/financial → Financial/
+5. Medical/doctor/prescription → Medical/
+6. Running/workout/exercise → Health_Fitness/
+7. Wedding/personal events → Personal/
 
 Reply with JSON only. /no_think"""
         
         else:  # detailed
             # Full prompt for large models (4B+)
-            return f"""READ the document content below and classify it.
+            return f"""READ the document content below and classify it into an appropriate folder.
 
 STEP 1: First, write a "content_summary" describing what this document actually contains.
-STEP 2: Then classify based on that summary.
+STEP 2: Then classify based on that summary using an EXISTING folder or creating a NEW one.
 
-EXISTING categories:
+YOUR EXISTING FOLDER STRUCTURE:
 {category_info}
 
-You can create NEW categories/subcategories if needed (e.g., Home, Fashion, Lifestyle, Kitchen, Wardrobe).
-
-IMPORTANT REMINDERS:
-- Clothing/wardrobe lists → Personal/Fashion or Lifestyle (NOT fitness)
-- Kitchen/food inventory → Home/Kitchen or Hobbies/Cooking (NOT fitness)
-- Personal measurements for clothing → Personal/Fashion (NOT fitness or medical)
-- Health_Fitness is ONLY for actual workout/exercise content
+RULES:
+1. PREFER existing folders/subfolders when they match the document content
+2. CREATE new folders/subfolders only if no existing folder fits
+3. Insurance documents (policy, coverage, premium) → Insurance/ folder
+4. Financial documents (tax, bank, invoice) → Financial/ folder
+5. Medical documents (doctor, prescription) → Medical/ folder
+6. Clothing/wardrobe/fashion → Personal/Fashion or create new subfolder
+7. Kitchen/food inventory → Home/Kitchen
+8. Health_Fitness is ONLY for actual workout/exercise content (NOT insurance!)
 
 Filename (for reference): {filename}
 
